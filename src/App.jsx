@@ -11,6 +11,7 @@ import AdminLayout from "./pages/admin/AdminLayout"
 import AdminDashboard from "./pages/admin/AdminDashboard"
 import AdminUpload from "./pages/admin/AdminUpload"
 import AdminMaterials from "./pages/admin/AdminMaterials"
+import SearchPage from "./pages/SearchPage"
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="/form/:formId" element={<><Navbar /><FormPage /></>} />
         <Route path="/form/:formId/:subjectId" element={<><Navbar /><SubjectPage /></>} />
         <Route path="/dashboard" element={<><Navbar /><Dashboard /></>} />
+        <Route path="/search" element={<><Navbar /><SearchPage /></>} />
 
         {/* 后台管理 */}
         <Route path="/admin" element={<AdminLayout />}>
