@@ -3,7 +3,7 @@ import { Link, Outlet, useNavigate } from "react-router-dom"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "../../firebase"
 import { useAuth } from "../../context/AuthContext"
-import { LayoutDashboard, Upload, FileText, LogOut } from "lucide-react"
+import { LayoutDashboard, Upload, FileText, LogOut, Users, Home } from "lucide-react"
 import { signOut } from "firebase/auth"
 import { auth } from "../../firebase"
 
@@ -30,7 +30,6 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Sidebar */}
       <div className="w-56 bg-gray-900 text-white flex flex-col">
         <div className="p-6 border-b border-gray-700">
           <div className="flex items-center gap-2 font-bold text-lg">
@@ -44,27 +43,26 @@ export default function AdminLayout() {
           </div>
           <p className="text-xs text-gray-400 mt-1">Admin Panel</p>
         </div>
+
         <nav className="flex-1 p-4 space-y-1">
-          <Link
-            to="/admin"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm"
-          >
+          <Link to="/admin" className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm">
             <LayoutDashboard size={16} /> 概览 / Overview
           </Link>
-          <Link
-            to="/admin/upload"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm"
-          >
+          <Link to="/admin/upload" className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm">
             <Upload size={16} /> 上传资料 / Upload
           </Link>
-          <Link
-            to="/admin/materials"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm"
-          >
+          <Link to="/admin/materials" className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm">
             <FileText size={16} /> 管理资料 / Materials
           </Link>
+          <Link to="/admin/users" className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm">
+            <Users size={16} /> 用户管理 / Users
+          </Link>
         </nav>
-        <div className="p-4 border-t border-gray-700">
+
+        <div className="p-4 border-t border-gray-700 space-y-2">
+          <Link to="/" className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition">
+            <Home size={14} /> 回到网站 / Back to Site
+          </Link>
           <button
             onClick={() => signOut(auth).then(() => navigate("/"))}
             className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition"
@@ -74,7 +72,6 @@ export default function AdminLayout() {
         </div>
       </div>
 
-      {/* Main content */}
       <div className="flex-1 bg-gray-50 overflow-auto">
         <Outlet />
       </div>
