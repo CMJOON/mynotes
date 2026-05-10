@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react"
-import { useSearchParams, Link } from "react-router-dom"
-import { collection, getDocs } from "firebase/firestore"
+import { useSearchParams, Link, useNavigate } from "react-router-dom"
+import { collection, getDocs, doc, getDoc } from "firebase/firestore"
 import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
-import { doc, getDoc } from "firebase/firestore"
 import { Lock, Download, Eye, Search } from "lucide-react"
 import { supabaseAdmin } from "../supabase"
 import toast from "react-hot-toast"
@@ -31,6 +30,7 @@ export default function SearchPage() {
   const [searchParams] = useSearchParams()
   const query = searchParams.get("q") || ""
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [userData, setUserData] = useState(null)
@@ -38,21 +38,17 @@ export default function SearchPage() {
   useEffect(() => {
     async function fetchResults() {
       setLoading(true)
-
       if (user) {
         const userDoc = await getDoc(doc(db, "users", user.uid))
         if (userDoc.exists()) setUserData(userDoc.data())
       }
-
       const snapshot = await getDocs(collection(db, "materials"))
       const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-
       const filtered = all.filter(m =>
         m.title?.toLowerCase().includes(query.toLowerCase()) ||
         m.subjectName?.toLowerCase().includes(query.toLowerCase()) ||
         m.type?.toLowerCase().includes(query.toLowerCase())
       )
-
       setResults(filtered)
       setLoading(false)
     }
@@ -60,6 +56,11 @@ export default function SearchPage() {
   }, [query, user])
 
   const handleView = async (material) => {
+    if (!user) {
+      toast.error("请先登录 / Please login first")
+      navigate("/login")
+      return
+    }
     try {
       if (material.filePath) {
         const { data } = supabaseAdmin.storage
@@ -75,6 +76,11 @@ export default function SearchPage() {
   }
 
   const handleDownload = async (material) => {
+    if (!user) {
+      toast.error("请先登录 / Please login first")
+      navigate("/login")
+      return
+    }
     try {
       let url = ""
       if (material.filePath) {
@@ -109,8 +115,6 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f0f4f8" }}>
-
-      {/* Header */}
       <div style={{ backgroundColor: "#e8eef4" }} className="border-b border-gray-200 px-4 py-10">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center gap-2 text-blue-600 mb-2">
@@ -124,7 +128,6 @@ export default function SearchPage() {
         </div>
       </div>
 
-      {/* 结果列表 */}
       <div className="max-w-5xl mx-auto px-4 py-6">
         {loading ? (
           <div className="text-center py-20 text-gray-400">搜索中... / Searching...</div>

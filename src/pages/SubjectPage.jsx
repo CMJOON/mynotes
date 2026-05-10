@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom"
+import { useParams, Link, useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { db } from "../firebase"
@@ -37,6 +37,7 @@ const TABS = [
 export default function SubjectPage() {
   const { formId, subjectId } = useParams()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [subject, setSubject] = useState(null)
   const [materials, setMaterials] = useState([])
   const [userData, setUserData] = useState(null)
@@ -47,82 +48,100 @@ export default function SubjectPage() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
-
       const subjectDoc = await getDoc(doc(db, "subjects", subjectId))
-      if (subjectDoc.exists()) setSubject({ id: subjectDoc.id, ...subjectDoc.data() })
+      if (subjectDoc.exists()) {
+        setSubject({ id: subjectDoc.id, ...subjectDoc.data() })
+      }
 
+      const formNumber = Number(formId)
+      const subjectName = subjectDoc.exists() ? subjectDoc.data().name : ""
       const q = query(
         collection(db, "materials"),
-        where("form", "==", parseInt(formId)),
-        where("subjectName", "==", subjectDoc.data()?.name)
+        where("form", "==", formNumber),
+        where("subjectName", "==", subjectName)
       )
       const snapshot = await getDocs(q)
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-      data.sort((a, b) => (a.chapter || a.year) - (b.chapter || b.year))
+      data.sort((a, b) => (a.chapter || a.year || 0) - (b.chapter || b.year || 0))
       setMaterials(data)
-
       if (user) {
         const userDoc = await getDoc(doc(db, "users", user.uid))
         if (userDoc.exists()) setUserData(userDoc.data())
       }
-
       setLoading(false)
     }
     fetchData()
   }, [formId, subjectId, user])
 
-const handleDownload = async (material) => {
-  console.log("handleDownload called", material)
-  try {
-    let url = ""
-    
-    if (material.filePath) {
-      const { data } = supabaseAdmin.storage
-        .from("materials")
-        .getPublicUrl(material.filePath)
-      url = data.publicUrl
-    } else {
-      url = material.fileUrl
+  const handleView = async (material) => {
+    const accessible = canAccess(user, userData, material)
+    if (!accessible) {
+      if (!user) {
+        toast.error("请先登录 / Please login first")
+        navigate("/login")
+      } else {
+        toast.error("访问受限 / Access denied")
+      }
+      return
     }
 
-    toast.loading("下载中... / Downloading...")
-    const response = await fetch(url)
-    if (!response.ok) throw new Error("Fetch failed: " + response.status)
-    const blob = await response.blob()
-    const blobUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = blobUrl
-    link.setAttribute("download", material.title + ".pdf")
-    link.style.display = "none"
-    document.body.appendChild(link)
-    link.click()
-    setTimeout(() => {
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(blobUrl)
-    }, 100)
-    toast.dismiss()
-    toast.success("下载成功！/ Downloaded!")
-  } catch (err) {
-    toast.dismiss()
-    console.error("Download error:", err)
-    toast.error("下载失败: " + err.message)
-  }
-}
+    try {
+      const url = material.filePath
+        ? supabaseAdmin.storage.from("materials").getPublicUrl(material.filePath).data.publicUrl
+        : material.fileUrl
 
-const handleView = async (material) => {
-  try {
-    if (material.filePath) {
-      const { data } = supabaseAdmin.storage
-        .from("materials")
-        .getPublicUrl(material.filePath)
-      window.open(data.publicUrl, "_blank")
-    } else {
-      window.open(material.fileUrl, "_blank")
+      if (!url) {
+        throw new Error("No file URL available")
+      }
+
+      window.open(url, "_blank")
+    } catch (err) {
+      toast.error("查阅失败 / View failed")
     }
-  } catch (err) {
-    toast.error("查阅失败 / View failed")
   }
-}
+
+  const handleDownload = async (material) => {
+    const accessible = canAccess(user, userData, material)
+    if (!accessible) {
+      if (!user) {
+        toast.error("请先登录 / Please login first")
+        navigate("/login")
+      } else {
+        toast.error("访问受限 / Access denied")
+      }
+      return
+    }
+
+    try {
+      const url = material.filePath
+        ? supabaseAdmin.storage.from("materials").getPublicUrl(material.filePath).data.publicUrl
+        : material.fileUrl
+
+      if (!url) {
+        throw new Error("No file URL available")
+      }
+
+      toast.loading("下载中... / Downloading...")
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = blobUrl
+      link.setAttribute("download", material.title + ".pdf")
+      link.style.display = "none"
+      document.body.appendChild(link)
+      link.click()
+      setTimeout(() => {
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(blobUrl)
+      }, 100)
+      toast.dismiss()
+      toast.success("下载成功！/ Downloaded!")
+    } catch (err) {
+      toast.dismiss()
+      toast.error("下载失败 / Download failed")
+    }
+  }
 
   const filtered = activeTab === "all"
     ? materials
@@ -130,7 +149,6 @@ const handleView = async (material) => {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f0f4f8" }}>
-
       <div style={{ backgroundColor: "#e8eef4" }} className="border-b border-gray-200 px-4 py-10">
         <div className="max-w-5xl mx-auto">
           <Link to={`/form/${formId}`} className="text-sm text-blue-600 hover:underline">
@@ -214,9 +232,9 @@ const handleView = async (material) => {
                   <div className="flex items-center gap-2">
                     {accessible ? (
                       <>
-                       <button
+                        <button
                           onClick={() => handleView(material)}
-                         className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition"
+                          className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition"
                         >
                           <Eye size={14} />
                           查阅
@@ -225,7 +243,7 @@ const handleView = async (material) => {
                           onClick={() => handleDownload(material)}
                           className="flex items-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 transition"
                         >
-                         <Download size={14} />
+                          <Download size={14} />
                           下载
                         </button>
                       </>
@@ -249,12 +267,8 @@ const handleView = async (material) => {
       {showPaywall && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">
-              解锁完整内容 🔓
-            </h2>
-            <p className="text-gray-500 mb-6">
-              购买后即可访问所有章节的笔记与练习
-            </p>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">解锁完整内容 🔓</h2>
+            <p className="text-gray-500 mb-6">购买后即可访问所有章节的笔记与练习</p>
             <div className="space-y-3 mb-6">
               <div className="border border-gray-200 rounded-xl p-4 hover:border-blue-400 cursor-pointer transition">
                 <div className="flex justify-between items-center">
@@ -278,12 +292,12 @@ const handleView = async (material) => {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowPaywall(false)}
-               className="flex-1 border border-gray-200 py-2.5 rounded-xl text-gray-600 hover:bg-gray-50 transition"
+                className="flex-1 border border-gray-200 py-2.5 rounded-xl text-gray-600 hover:bg-gray-50 transition"
               >
                 稍后再说
               </button>
               <a
-                href="https://wa.me/60XXXXXXXXX?text=Hi%2C%20I%20want%20to%20purchase%20MyNotes%20package"
+                href="https://wa.me/601154150610?text=Hi%2C%20I%20want%20to%20purchase%20MyNotes%20package"
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-center font-semibold hover:bg-green-600 transition"
