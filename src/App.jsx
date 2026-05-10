@@ -7,20 +7,31 @@ import FormPage from "./pages/FormPage"
 import SubjectPage from "./pages/SubjectPage"
 import Dashboard from "./pages/Dashboard"
 import NotFound from "./pages/NotFound"
-
+import AdminLayout from "./pages/admin/AdminLayout"
+import AdminDashboard from "./pages/admin/AdminDashboard"
+import AdminUpload from "./pages/admin/AdminUpload"
+import AdminMaterials from "./pages/admin/AdminMaterials"
 
 function App() {
   return (
     <BrowserRouter>
-      <Navbar />
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/form/:formId" element={<FormPage />} />
-        <Route path="/form/:formId/:subjectId" element={<SubjectPage />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="*" element={<NotFound />} />
+        {/* 普通页面 */}
+        <Route path="/" element={<><Navbar /><Home /></>} />
+        <Route path="/login" element={<><Navbar /><Login /></>} />
+        <Route path="/register" element={<><Navbar /><Register /></>} />
+        <Route path="/form/:formId" element={<><Navbar /><FormPage /></>} />
+        <Route path="/form/:formId/:subjectId" element={<><Navbar /><SubjectPage /></>} />
+        <Route path="/dashboard" element={<><Navbar /><Dashboard /></>} />
+
+        {/* 后台管理 */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="upload" element={<AdminUpload />} />
+          <Route path="materials" element={<AdminMaterials />} />
+        </Route>
+
+        <Route path="*" element={<><Navbar /><NotFound /></>} />
       </Routes>
     </BrowserRouter>
   )

@@ -4,6 +4,8 @@ import { collection, query, where, getDocs, doc, getDoc } from "firebase/firesto
 import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
 import { Lock, Download, Eye } from "lucide-react"
+import { supabaseAdmin } from "../supabase"
+import toast from "react-hot-toast"
 
 function canAccess(user, userData, material) {
   if (material.type === "trial" || material.type === "pastyear") return true
@@ -68,6 +70,59 @@ export default function SubjectPage() {
     }
     fetchData()
   }, [formId, subjectId, user])
+
+const handleDownload = async (material) => {
+  console.log("handleDownload called", material)
+  try {
+    let url = ""
+    
+    if (material.filePath) {
+      const { data } = supabaseAdmin.storage
+        .from("materials")
+        .getPublicUrl(material.filePath)
+      url = data.publicUrl
+    } else {
+      url = material.fileUrl
+    }
+
+    toast.loading("下载中... / Downloading...")
+    const response = await fetch(url)
+    if (!response.ok) throw new Error("Fetch failed: " + response.status)
+    const blob = await response.blob()
+    const blobUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = blobUrl
+    link.setAttribute("download", material.title + ".pdf")
+    link.style.display = "none"
+    document.body.appendChild(link)
+    link.click()
+    setTimeout(() => {
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
+    }, 100)
+    toast.dismiss()
+    toast.success("下载成功！/ Downloaded!")
+  } catch (err) {
+    toast.dismiss()
+    console.error("Download error:", err)
+    toast.error("下载失败: " + err.message)
+  }
+}
+
+const handleView = async (material) => {
+  try {
+    if (material.filePath) {
+      const { data } = supabaseAdmin.storage
+        .from("materials")
+        .getPublicUrl(material.filePath)
+      window.open(data.publicUrl, "_blank")
+    } else {
+      window.open(material.fileUrl, "_blank")
+    }
+  } catch (err) {
+    toast.error("查阅失败 / View failed")
+  }
+}
 
   const filtered = activeTab === "all"
     ? materials
@@ -158,15 +213,22 @@ export default function SubjectPage() {
 
                   <div className="flex items-center gap-2">
                     {accessible ? (
-                      <a
-                        href={material.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 transition"
-                      >
-                        <Download size={14} />
-                        下载
-                      </a>
+                      <>
+                       <button
+                          onClick={() => handleView(material)}
+                         className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition"
+                        >
+                          <Eye size={14} />
+                          查阅
+                        </button>
+                        <button
+                          onClick={() => handleDownload(material)}
+                          className="flex items-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 transition"
+                        >
+                         <Download size={14} />
+                          下载
+                        </button>
+                      </>
                     ) : (
                       <button
                         onClick={() => setShowPaywall(true)}
@@ -216,17 +278,18 @@ export default function SubjectPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowPaywall(false)}
-                className="flex-1 border border-gray-200 py-2.5 rounded-xl text-gray-600 hover:bg-gray-50 transition"
+               className="flex-1 border border-gray-200 py-2.5 rounded-xl text-gray-600 hover:bg-gray-50 transition"
               >
                 稍后再说
               </button>
-              <Link
-                to="/dashboard"
-                onClick={() => setShowPaywall(false)}
-                className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl text-center font-semibold hover:bg-blue-700 transition"
+              <a
+                href="https://wa.me/60XXXXXXXXX?text=Hi%2C%20I%20want%20to%20purchase%20MyNotes%20package"
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-center font-semibold hover:bg-green-600 transition"
               >
-                立即购买
-              </Link>
+                WhatsApp 购买
+              </a>
             </div>
           </div>
         </div>
