@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext"
 import { useNavigate } from "react-router-dom"
 import { User, ShoppingBag, Crown, BookOpen, Package, Star } from "lucide-react"
 import PurchaseModal from "./PurchaseModal"
+import { PRICING } from "../utils/constants"
 
 const TABS = [
   { key: "profile", zh: "我的资料", en: "Profile", icon: User },
@@ -34,39 +35,6 @@ function groupSubjectsByForm(paidSubjects = []) {
   }
   return groups
 }
-
-const PRICING = [
-  {
-    key: "subject",
-    title: "单科目",
-    titleEn: "Single Subject",
-    price: "RM 25",
-    desc: "1个科目全部章节笔记与练习",
-    descEn: "All notes & exercises for 1 subject",
-    highlight: false,
-    emoji: "📚",
-  },
-  {
-    key: "form",
-    title: "年级套餐",
-    titleEn: "Form Package",
-    price: "RM 100",
-    desc: "1个年级全部科目",
-    descEn: "All subjects for 1 form",
-    highlight: true,
-    emoji: "📦",
-  },
-  {
-    key: "premium",
-    title: "全站会员",
-    titleEn: "Premium",
-    price: "RM 150",
-    desc: "Form 1-5 所有科目，永久有效",
-    descEn: "All subjects Form 1–5, lifetime",
-    highlight: false,
-    emoji: "⭐",
-  },
-]
 
 export default function Dashboard() {
   const { user, userData, loading } = useAuth()

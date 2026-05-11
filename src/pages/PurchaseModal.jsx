@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { collection, getDocs } from "firebase/firestore"
 import { db } from "../firebase"
-import { X, MessageCircle, ChevronDown } from "lucide-react"
+import { X, ChevronDown } from "lucide-react"
+import { PRICING } from "../utils/constants"
 
 const WHATSAPP_NUMBER = "601174470610"
 
@@ -11,23 +12,16 @@ function buildWhatsAppUrl(message) {
 
 const FORMS = ["1", "2", "3", "4", "5"]
 
-const PACKAGES = [
-  { key: "subject", labelZh: "单科目",   label: "Single Subject", price: "RM 25",  descZh: "1个科目全章节",          desc: "All chapters for 1 subject" },
-  { key: "form",    labelZh: "年级套餐", label: "Form Package",   price: "RM 100", descZh: "1个年级全部科目",        desc: "All subjects for 1 form" },
-  { key: "premium", labelZh: "全站会员", label: "Premium",        price: "RM 150", descZh: "Form 1–5 全科，永久有效", desc: "All subjects Form 1–5, Lifetime" },
-]
+// PurchaseModal 内部使用的套餐列表（从共享常量转换）
+const PACKAGES = PRICING.map(p => ({
+  key: p.key,
+  labelZh: p.title,
+  label: p.titleEn,
+  price: p.price,
+  descZh: p.desc,
+  desc: p.descEn,
+}))
 
-/**
- * PurchaseModal
- *
- * Props:
- *   open         – boolean, whether modal is visible
- *   onClose      – function to close modal
- *   userData     – Firestore user doc data (name, phone, formLevel)
- *   defaultForm  – pre-fill Form (string, e.g. "3")
- *   defaultSubject – pre-fill Subject name (string)
- *   defaultPackage – pre-fill package key ("subject" | "form" | "premium")
- */
 export default function PurchaseModal({
   open,
   onClose,
@@ -45,7 +39,6 @@ export default function PurchaseModal({
   const [loadingSubs, setLoadingSubs] = useState(false)
   const [errors,     setErrors]     = useState({})
 
-  // Pre-fill user info whenever userData or modal opens
   useEffect(() => {
     if (open) {
       setName(userData?.name || "")
@@ -57,7 +50,6 @@ export default function PurchaseModal({
     }
   }, [open, userData, defaultForm, defaultSubject, defaultPackage])
 
-  // Fetch subjects from Firestore whenever form changes
   useEffect(() => {
     if (!form) { setSubjectList([]); return }
     setLoadingSubs(true)
@@ -162,7 +154,7 @@ export default function PurchaseModal({
                   <p className={`text-xs font-bold ${pkg === p.key ? "text-blue-700" : "text-gray-700"}`}>
                     {p.labelZh}
                   </p>
-                  <p className={`text-xs text-gray-400 leading-tight`}>{p.label}</p>
+                  <p className="text-xs text-gray-400 leading-tight">{p.label}</p>
                   <p className={`text-sm font-bold mt-1 ${pkg === p.key ? "text-blue-600" : "text-gray-500"}`}>
                     {p.price}
                   </p>
@@ -224,7 +216,6 @@ export default function PurchaseModal({
             </div>
           )}
 
-          {/* Divider */}
           <div className="border-t border-gray-100 pt-1" />
 
           {/* Name */}
@@ -261,7 +252,6 @@ export default function PurchaseModal({
 
         {/* Footer */}
         <div className="px-6 pb-5 pt-3 space-y-3 border-t border-gray-100 shrink-0">
-          {/* Preview */}
           <div className="bg-gray-50 rounded-xl px-4 py-3 text-xs text-gray-500 space-y-1">
             <p className="font-semibold text-gray-600 mb-1">订单摘要 / Order Summary</p>
             <p>配套 / Package : {PACKAGES.find(p => p.key === pkg)?.labelZh} ({PACKAGES.find(p => p.key === pkg)?.label}) — {PACKAGES.find(p => p.key === pkg)?.price}</p>

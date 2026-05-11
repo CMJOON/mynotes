@@ -18,13 +18,17 @@ import AdminMaterials from "./pages/admin/AdminMaterials"
 import AdminUsers from "./pages/admin/AdminUsers"
 
 function RequireProfile({ children }) {
-  const { user, userData } = useAuth()
+  const { user, userData, loading } = useAuth()
   const location = useLocation()
+
+  // 数据还在加载中时不做任何跳转
+  if (loading) return null
 
   const skipRoutes = ["/complete-profile", "/verify-email", "/login", "/register"]
   if (skipRoutes.includes(location.pathname)) return children
 
-  if (user && !userData?.name) {
+  // 已登录但未填写姓名，跳转到完善资料页
+  if (user && userData !== null && !userData?.name) {
     return <Navigate to="/complete-profile" replace />
   }
 

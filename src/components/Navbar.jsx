@@ -1,26 +1,16 @@
 import { Link, useNavigate } from "react-router-dom"
 import { signOut } from "firebase/auth"
-import { auth, db } from "../firebase"
+import { auth } from "../firebase"
 import { useAuth } from "../context/AuthContext"
-import { useEffect, useState } from "react"
-import { doc, getDoc } from "firebase/firestore"
+import { useState } from "react"
 import { Search } from "lucide-react"
 import toast from "react-hot-toast"
 
 export default function Navbar() {
-  const { user } = useAuth()
+  const { user, userData } = useAuth()
   const navigate = useNavigate()
-  const [isAdmin, setIsAdmin] = useState(false)
+  const isAdmin = userData?.role === "admin"
   const [searchQuery, setSearchQuery] = useState("")
-
-  useEffect(() => {
-    async function checkAdmin() {
-      if (!user) { setIsAdmin(false); return }
-      const userDoc = await getDoc(doc(db, "users", user.uid))
-      setIsAdmin(userDoc.data()?.role === "admin")
-    }
-    checkAdmin()
-  }, [user])
 
   const handleLogout = async () => {
     await signOut(auth)

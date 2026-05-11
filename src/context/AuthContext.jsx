@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import { onAuthStateChanged } from "firebase/auth"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, onSnapshot } from "firebase/firestore"
 import { auth, db } from "../firebase"
 
 const AuthContext = createContext()
@@ -11,21 +11,41 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user)
-      if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-        if (userDoc.exists()) {
-          setUserData(userDoc.data())
-        } else {
-          setUserData(null)
-        }
+    let unsubUser = null
+
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      // 取消上一个用户的 Firestore 监听
+      if (unsubUser) {
+        unsubUser()
+        unsubUser = null
+      }
+
+      setUser(firebaseUser)
+
+      if (firebaseUser) {
+        // 实时监听用户数据，购买后自动更新
+        unsubUser = onSnapshot(
+          doc(db, "users", firebaseUser.uid),
+          (snap) => {
+            setUserData(snap.exists() ? snap.data() : null)
+            setLoading(false)
+          },
+          () => {
+            // 监听出错时静默失败，不影响页面
+            setUserData(null)
+            setLoading(false)
+          }
+        )
       } else {
         setUserData(null)
+        setLoading(false)
       }
-      setLoading(false)
     })
-    return unsubscribe
+
+    return () => {
+      unsubAuth()
+      if (unsubUser) unsubUser()
+    }
   }, [])
 
   return (

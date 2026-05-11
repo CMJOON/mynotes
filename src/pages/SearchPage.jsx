@@ -1,23 +1,12 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, Link, useNavigate } from "react-router-dom"
-import { collection, getDocs, doc, getDoc } from "firebase/firestore"
+import { collection, getDocs } from "firebase/firestore"
 import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
 import { Lock, Download, Eye, Search } from "lucide-react"
 import { supabaseAdmin } from "../supabase"
 import toast from "react-hot-toast"
-
-function canAccess(user, userData, material) {
-  if (material.type === "trial" || material.type === "pastyear") return true
-  if (material.chapter <= 3) return true
-  if (!user) return false
-  if (userData?.role === "paid") {
-    if (userData?.paidPackage === "premium") return true
-    if (userData?.paidPackage === `form${material.form}`) return true
-    if (userData?.paidSubjects?.includes(material.subjectName + "_form" + material.form)) return true
-  }
-  return false
-}
+import { canAccess } from "../utils/access"
 
 const TYPE_LABELS = {
   note: { zh: "笔记", en: "Notes" },
@@ -29,19 +18,14 @@ const TYPE_LABELS = {
 export default function SearchPage() {
   const [searchParams] = useSearchParams()
   const query = searchParams.get("q") || ""
-  const { user } = useAuth()
+  const { user, userData } = useAuth()
   const navigate = useNavigate()
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
-  const [userData, setUserData] = useState(null)
 
   useEffect(() => {
     async function fetchResults() {
       setLoading(true)
-      if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-        if (userDoc.exists()) setUserData(userDoc.data())
-      }
       const snapshot = await getDocs(collection(db, "materials"))
       const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
       const filtered = all.filter(m =>
@@ -54,6 +38,8 @@ export default function SearchPage() {
     }
     fetchResults()
   }, [query, user])
+
+  // userData 已通过 useAuth() 实时获取，无需额外 Firestore 查询
 
   const handleView = async (material) => {
     if (!user) {

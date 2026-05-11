@@ -1,47 +1,21 @@
 import { Link } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 import { BookOpen, FileText, Download, Star } from "lucide-react"
+import { PRICING } from "../utils/constants"
 
 const FORMS = [1, 2, 3, 4, 5]
-
-const PRICING = [
-  {
-    title: "单科目",
-    titleEn: "Single Subject",
-    price: "RM 20",
-    desc: "1个科目全部章节笔记与练习",
-    descEn: "All notes & exercises for 1 subject",
-    highlight: false,
-  },
-  {
-    title: "年级套餐",
-    titleEn: "Form Package",
-    price: "RM 100",
-    desc: "1个年级全部科目",
-    descEn: "All subjects for 1 form",
-    highlight: true,
-  },
-  {
-    title: "全站会员",
-    titleEn: "Premium",
-    price: "RM 150",
-    desc: "Form 1-5 所有科目，永久有效",
-    descEn: "All subjects Form 1-5, lifetime",
-    highlight: false,
-  },
-]
 
 const FEATURES = [
   { icon: FileText, title: "SPM Trial Papers", desc: "历年各州试卷，完全免费下载", descEn: "All states, free download" },
   { icon: BookOpen, title: "Past Year Papers", desc: "SPM历年真题，完全免费", descEn: "SPM past years, free" },
   { icon: Download, title: "笔记与练习", desc: "系统化笔记，前3章免费", descEn: "Structured notes, first 3 chapters free" },
-  { icon: Star, title: "低价解锁", desc: "单科目只需 RM 20", descEn: "Single subject from RM 20" },
+  { icon: Star, title: "低价解锁", desc: `单科目只需 ${PRICING[0].price}`, descEn: `Single subject from ${PRICING[0].price}` },
 ]
 
 const STATS = [
   { value: "500+", label: "份学习资料", labelEn: "Materials" },
   { value: "11", label: "热门科目", labelEn: "Subjects" },
-  { value: "RM 20", label: "起步价格", labelEn: "Starting Price" },
+  { value: PRICING[0].price, label: "起步价格", labelEn: "Starting Price" },
 ]
 
 export default function Home() {
@@ -151,7 +125,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {PRICING.map((plan) => (
               <div
-                key={plan.title}
+                key={plan.key}
                 className={`rounded-2xl p-6 text-center border-2 transition ${
                   plan.highlight
                     ? "border-blue-500 bg-blue-50 shadow-lg"

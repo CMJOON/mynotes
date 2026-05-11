@@ -7,18 +7,7 @@ import { Lock, Download, Eye } from "lucide-react"
 import { supabaseAdmin } from "../supabase"
 import toast from "react-hot-toast"
 import PurchaseModal from "./PurchaseModal"
-
-function canAccess(user, userData, material) {
-  if (material.type === "trial" || material.type === "pastyear") return true
-  if (material.chapter <= 3) return true
-  if (!user) return false
-  if (userData?.role === "paid") {
-    if (userData?.paidPackage === "premium") return true
-    if (userData?.paidPackage === `form${material.form}`) return true
-    if (userData?.paidSubjects?.includes(material.subjectName + "_form" + material.form)) return true
-  }
-  return false
-}
+import { canAccess } from "../utils/access"
 
 const TYPE_LABELS = {
   note: { zh: "笔记", en: "Notes" },
