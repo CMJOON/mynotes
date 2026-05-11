@@ -1,10 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
-import { db } from "../firebase"
-import { useAuth } from "../context/AuthContext"
 import { Lock, Download, Eye } from "lucide-react"
-import { supabase } from "../supabase"   // ✅ 改用普通 supabase（anon key）
 import toast from "react-hot-toast"
 import PurchaseModal from "./PurchaseModal"
 import { canAccess } from "../utils/access"
@@ -24,20 +20,16 @@ const TABS = [
   { key: "pastyear", zh: "Past Year", en: "Past Year" },
 ]
 
-// ✅ 抽取成共用函数，SearchPage 和 SubjectPage 都可以用
+// 获取文件下载 URL
 function getFileUrl(material) {
   if (material.filePath) {
-    const { data } = supabase.storage
-      .from("materials")
-      .getPublicUrl(material.filePath)
-    return data.publicUrl
+    return `http://localhost:3001/api/download/${material.filePath}`
   }
-  return material.fileUrl || null
+  return null
 }
 
 export default function SubjectPage() {
   const { formId, subjectId } = useParams()
-  const { user, userData } = useAuth()
   const navigate = useNavigate()
   const [subject, setSubject] = useState(null)
   const [materials, setMaterials] = useState([])
@@ -48,39 +40,32 @@ export default function SubjectPage() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
-      const subjectDoc = await getDoc(doc(db, "subjects", subjectId))
-      if (subjectDoc.exists()) {
-        setSubject({ id: subjectDoc.id, ...subjectDoc.data() })
-      }
+      try {
+        // 获取科目信息
+        const subjectsResponse = await fetch("http://localhost:3001/api/subjects")
+        const subjects = await subjectsResponse.json()
+        const subjectData = subjects.find(s => s.id === subjectId)
+        setSubject(subjectData)
 
-      const formNumber = Number(formId)
-      const subjectName = subjectDoc.exists() ? subjectDoc.data().name : ""
-      const q = query(
-        collection(db, "materials"),
-        where("form", "==", formNumber),
-        where("subjectName", "==", subjectName)
-      )
-      const snapshot = await getDocs(q)
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-      data.sort((a, b) => (a.chapter || a.year || 0) - (b.chapter || b.year || 0))
-      setMaterials(data)
-      setLoading(false)
+        // 获取资料列表
+        const materialsResponse = await fetch(`http://localhost:3001/api/materials?form=${formId}&subject=${subjectData?.name || ''}`)
+        const materialsData = await materialsResponse.json()
+
+        // 排序资料
+        materialsData.sort((a, b) => (a.chapter || a.year || 0) - (b.chapter || b.year || 0))
+        setMaterials(materialsData)
+      } catch (error) {
+        console.error("获取数据失败:", error)
+        toast.error("获取数据失败 / Failed to load data")
+      } finally {
+        setLoading(false)
+      }
     }
     fetchData()
   }, [formId, subjectId])
 
   const handleView = async (material) => {
-    const accessible = canAccess(user, userData, material)
-    if (!accessible) {
-      if (!user) {
-        toast.error("请先登录 / Please login first")
-        navigate("/login")
-      } else {
-        toast.error("请先购买此科目 / Please unlock this subject first")
-        setShowPurchase(true)
-      }
-      return
-    }
+    // 暂时跳过权限检查，直接允许查看
     try {
       const url = getFileUrl(material)
       if (!url) throw new Error("No file URL available")
@@ -91,22 +76,12 @@ export default function SubjectPage() {
   }
 
   const handleDownload = async (material) => {
-    const accessible = canAccess(user, userData, material)
-    if (!accessible) {
-      if (!user) {
-        toast.error("请先登录 / Please login first")
-        navigate("/login")
-      } else {
-        toast.error("请先购买此科目 / Please unlock this subject first")
-        setShowPurchase(true)
-      }
-      return
-    }
+    // 暂时跳过权限检查，直接允许下载
     try {
       const url = getFileUrl(material)
       if (!url) throw new Error("No file URL available")
 
-      // ✅ 用 <a> 标签直接触发浏览器下载，不把大文件加载进内存
+      // 用 <a> 标签直接触发浏览器下载
       const link = document.createElement("a")
       link.href = url
       link.setAttribute("download", material.title + ".pdf")

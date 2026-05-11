@@ -1,10 +1,7 @@
 import { Link, useNavigate } from "react-router-dom"
-import { signOut } from "firebase/auth"
-import { auth } from "../firebase"
 import { useAuth } from "../context/AuthContext"
 import { useState } from "react"
 import { Search } from "lucide-react"
-import toast from "react-hot-toast"
 
 export default function Navbar() {
   const { user, userData } = useAuth()
@@ -12,15 +9,8 @@ export default function Navbar() {
   const isAdmin = userData?.role === "admin"
   const [searchQuery, setSearchQuery] = useState("")
 
-  const handleLogout = async () => {
-    await signOut(auth)
-    toast.success("已登出 / Logged out")
-    navigate("/")
-  }
-
   const handleSearch = (e) => {
     e.preventDefault()
-    if (!searchQuery.trim()) return
     navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
     setSearchQuery("")
   }
@@ -53,48 +43,7 @@ export default function Navbar() {
         </form>
 
         <div className="flex items-center gap-4 shrink-0">
-          {user ? (
-            <>
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition font-medium"
-                >
-                  ⚙️ Admin
-                </Link>
-              )}
-              <span className="text-sm text-gray-500 hidden sm:block">
-                👋 {user.displayName}
-              </span>
-              <Link
-                to="/dashboard"
-                className="text-sm text-gray-700 hover:text-blue-600 font-medium"
-              >
-                个人中心
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="text-sm border border-gray-300 px-4 py-1.5 rounded-lg hover:bg-gray-50 transition"
-              >
-                登出
-              </button>
-            </>
-          ) : (
-            <>
-              <Link
-                to="/login"
-                className="text-sm text-gray-700 hover:text-blue-600 font-medium"
-              >
-                登录 / Login
-              </Link>
-              <Link
-                to="/register"
-                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium"
-              >
-                注册 / Register
-              </Link>
-            </>
-          )}
+          {/* Authentication removed - now using local database */}
         </div>
       </div>
     </nav>

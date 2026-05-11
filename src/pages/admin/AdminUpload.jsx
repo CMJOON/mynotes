@@ -1,13 +1,8 @@
 import { useState, useEffect } from "react"
-import { collection, addDoc, getDocs } from "firebase/firestore"
-import { db } from "../../firebase"
-import { supabase } from "../../supabase"   // ✅ 只用 anon key 的普通客户端
 import toast from "react-hot-toast"
 import { Upload } from "lucide-react"
-import { useAuth } from "../../context/AuthContext"
 
 export default function AdminUpload() {
-  const { user } = useAuth()
   const [subjects, setSubjects] = useState([])
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState("")
@@ -25,8 +20,14 @@ export default function AdminUpload() {
 
   useEffect(() => {
     async function fetchSubjects() {
-      const snapshot = await getDocs(collection(db, "subjects"))
-      setSubjects(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+      try {
+        const response = await fetch("http://localhost:3001/api/subjects")
+        const data = await response.json()
+        setSubjects(data.map(s => ({ id: s.id, ...s })))
+      } catch (error) {
+        console.error("获取科目失败:", error)
+        toast.error("获取科目列表失败 / Failed to load subjects")
+      }
     }
     fetchSubjects()
   }, [])
@@ -44,62 +45,30 @@ export default function AdminUpload() {
       toast.error("文件太大，最大 50MB / File too large, max 50MB")
       return
     }
-// 检查用户是否登录
-    if (!user) {
-      toast.error("请先登录 / Please login first")
-      return
-    }
 
     setUploading(true)
     setUploadProgress("正在上传文件... / Uploading file...")
 
     try {
-      // ✅ 直接用 Supabase Storage 上传（anon key 足够）
-      const fileName = `${Date.now()}_${file.name.replace(/\s/g, "_")}`
+      // ✅ 使用本地后端 API 上传
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("title", form.title)
+      formData.append("type", form.type)
+      formData.append("form", form.form)
+      formData.append("subjectName", form.subjectName)
+      formData.append("chapter", form.chapter || "")
+      formData.append("year", form.year || "")
+      formData.append("state", form.state || "")
+      formData.append("freePreviewPages", form.freePreviewPages)
 
-      const { data, error: uploadError } = await supabase.storage
-        .from("materials")
-        .upload(fileName, file, {
-          contentType: "application/pdf",
-          upsert: false,
-        })
-
-      if (uploadError) {
-        throw new Error(uploadError.message)
-      }
-
-      setUploadProgress("正在保存资料信息... / Saving material info...")
-
-      // ✅ 临时跳过 Firestore 写入（等规则生效后再恢复）
-      console.log("文件已上传到 Supabase Storage:", data.path)
-      console.log("资料信息:", {
-        title: form.title,
-        type: form.type,
-        form: parseInt(form.form),
-        subjectName: form.subjectName,
-        chapter: parseInt(form.chapter) || 0,
-        year: parseInt(form.year) || 0,
-        state: form.state,
-        filePath: data.path,
-        freePreviewPages: parseInt(form.freePreviewPages),
-        downloadCount: 0,
-        createdAt: new Date(),
+      const response = await fetch("http://localhost:3001/api/materials", {
+        method: "POST",
+        body: formData,
       })
 
-      // 注释掉 Firestore 写入
-      // await addDoc(collection(db, "materials"), {
-      //   title: form.title,
-      //   type: form.type,
-      //   form: parseInt(form.form),
-      //   subjectName: form.subjectName,
-      //   chapter: parseInt(form.chapter) || 0,
-      //   year: parseInt(form.year) || 0,
-      //   state: form.state,
-      //   filePath: data.path,
-      //   freePreviewPages: parseInt(form.freePreviewPages),
-      //   downloadCount: 0,
-      //   createdAt: new Date(),
-      // })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "上传失败 / Upload failed")
 
       toast.success("上传成功！/ Upload successful!")
       setUploadProgress("")

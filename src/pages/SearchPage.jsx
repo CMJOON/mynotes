@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, Link, useNavigate } from "react-router-dom"
-import { collection, getDocs } from "firebase/firestore"
-import { db } from "../firebase"
-import { useAuth } from "../context/AuthContext"
 import { Lock, Download, Eye, Search } from "lucide-react"
-import { supabase } from "../supabase"   // ✅ 改用普通 supabase（anon key）
 import toast from "react-hot-toast"
-import { canAccess } from "../utils/access"
 
 const TYPE_LABELS = {
   note: { zh: "笔记", en: "Notes" },
@@ -18,7 +13,6 @@ const TYPE_LABELS = {
 export default function SearchPage() {
   const [searchParams] = useSearchParams()
   const query = searchParams.get("q") || ""
-  const { user, userData } = useAuth()
   const navigate = useNavigate()
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
@@ -26,59 +20,39 @@ export default function SearchPage() {
   useEffect(() => {
     async function fetchResults() {
       setLoading(true)
-      const snapshot = await getDocs(collection(db, "materials"))
-      const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-      const filtered = all.filter(m =>
-        m.title?.toLowerCase().includes(query.toLowerCase()) ||
-        m.subjectName?.toLowerCase().includes(query.toLowerCase()) ||
-        m.type?.toLowerCase().includes(query.toLowerCase())
-      )
-      setResults(filtered)
-      setLoading(false)
+      try {
+        const response = await fetch("http://localhost:3001/api/materials")
+        const all = await response.json()
+        const filtered = all.filter(m =>
+          m.title?.toLowerCase().includes(query.toLowerCase()) ||
+          m.subjectName?.toLowerCase().includes(query.toLowerCase()) ||
+          m.type?.toLowerCase().includes(query.toLowerCase())
+        )
+        setResults(filtered)
+      } catch (error) {
+        console.error("搜索失败:", error)
+        toast.error("搜索失败 / Search failed")
+      } finally {
+        setLoading(false)
+      }
     }
     fetchResults()
-  }, [query, user])
+  }, [query])
 
   const handleView = async (material) => {
-    if (!user) {
-      toast.error("请先登录 / Please login first")
-      navigate("/login")
-      return
-    }
     try {
-      // ✅ getPublicUrl 不需要 Service Key，anon key 就够
-      if (material.filePath) {
-        const { data } = supabase.storage
-          .from("materials")
-          .getPublicUrl(material.filePath)
-        window.open(data.publicUrl, "_blank")
-      } else {
-        window.open(material.fileUrl, "_blank")
-      }
+      const url = `http://localhost:3001/api/download/${material.filePath}`
+      window.open(url, "_blank")
     } catch (err) {
       toast.error("查阅失败 / View failed")
     }
   }
 
   const handleDownload = async (material) => {
-    if (!user) {
-      toast.error("请先登录 / Please login first")
-      navigate("/login")
-      return
-    }
     try {
-      let url = ""
-      // ✅ getPublicUrl 不需要 Service Key
-      if (material.filePath) {
-        const { data } = supabase.storage
-          .from("materials")
-          .getPublicUrl(material.filePath)
-        url = data.publicUrl
-      } else {
-        url = material.fileUrl
-      }
+      const url = `http://localhost:3001/api/download/${material.filePath}`
 
-      // ✅ 用 <a> 标签直接触发浏览器下载，不把大文件加载进内存
+      // 用 <a> 标签直接触发浏览器下载
       const link = document.createElement("a")
       link.href = url
       link.setAttribute("download", material.title + ".pdf")
@@ -93,16 +67,83 @@ export default function SearchPage() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#f0f4f8" }}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">搜索中... / Searching...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f0f4f8" }}>
       <div style={{ backgroundColor: "#e8eef4" }} className="border-b border-gray-200 px-4 py-10">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center gap-2 text-blue-600 mb-2">
-            <Search size={18} />
-            <span className="text-sm font-medium">搜索结果 / Search Results</span>
+            <Search size={20} />
+            <span className="text-sm">搜索结果</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">"{query}"</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-3xl font-bold text-gray-900">"{query}" 的搜索结果</h1>
+          <p className="text-gray-500 mt-1">找到 {results.length} 个结果</p>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        {results.length === 0 ? (
+          <div className="text-center py-12">
+            <Search size={48} className="text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">未找到相关资料</h3>
+            <p className="text-gray-500">尝试使用不同的关键词搜索</p>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {results.map((material) => (
+              <div key={material.id} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        {TYPE_LABELS[material.type]?.zh || material.type}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        Form {material.form} · {material.subjectName}
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{material.title}</h3>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      {material.chapter && <p>章节: {material.chapter}</p>}
+                      {material.year && <p>年份: {material.year}</p>}
+                      {material.state && <p>州属: {material.state}</p>}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 ml-4">
+                    <button
+                      onClick={() => handleView(material)}
+                      className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm transition-colors"
+                    >
+                      <Eye size={16} />
+                      查看
+                    </button>
+                    <button
+                      onClick={() => handleDownload(material)}
+                      className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+                    >
+                      <Download size={16} />
+                      下载
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
             找到 {results.length} 个结果 / Found {results.length} results
           </p>
         </div>

@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react"
-import { collection, getDocs } from "firebase/firestore"
-import { db } from "../firebase"
 import { X, ChevronDown } from "lucide-react"
 import { PRICING } from "../utils/constants"
 
@@ -56,9 +54,9 @@ export default function PurchaseModal({
     setSubject(defaultSubject || "")
     ;(async () => {
       try {
-        const snap = await getDocs(collection(db, "subjects"))
-        const list = snap.docs
-          .map(d => d.data())
+        const response = await fetch("http://localhost:3001/api/subjects")
+        const subjects = await response.json()
+        const list = subjects
           .filter(s => !s.form || String(s.form) === String(form))
           .map(s => s.name)
           .filter(Boolean)
