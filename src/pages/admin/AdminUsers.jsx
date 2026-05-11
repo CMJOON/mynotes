@@ -33,27 +33,37 @@ export default function AdminUsers() {
     try {
       await updateDoc(doc(db, "users", selectedUser.id), {
         role: selectedUser.role,
-        paidPackage: selectedUser.paidPackage || null,
+        // FIX: 明确处理 null，避免 undefined 写入 Firestore
+        paidPackage: selectedUser.paidPackage ?? null,
         paidSubjects: selectedUser.paidSubjects || [],
       })
       toast.success("权限已更新 / Permission updated!")
       fetchUsers()
       setSelectedUser(null)
     } catch (err) {
-      toast.error("更新失败 / Update failed")
+      // FIX: 加上 console.error 方便 debug
+      console.error("Update failed:", err)
+      toast.error("更新失败 / Update failed: " + err.message)
     } finally {
       setSaving(false)
     }
   }
 
+  // FIX: 把 paidSubjects 和 role 的更新合并到一次 setSelectedUser，避免 race condition
   function toggleSubject(subject, form) {
     const key = `${subject}_form${form}`
-    const current = selectedUser.paidSubjects || []
-    if (current.includes(key)) {
-      setSelectedUser({ ...selectedUser, paidSubjects: current.filter(s => s !== key) })
-    } else {
-      setSelectedUser({ ...selectedUser, paidSubjects: [...current, key] })
-    }
+    setSelectedUser(prev => {
+      const current = prev.paidSubjects || []
+      const isChecked = current.includes(key)
+      const newSubjects = isChecked
+        ? current.filter(s => s !== key)
+        : [...current, key]
+
+      // 如果勾选了科目，自动把 role 升为 paid
+      const newRole = (!isChecked && prev.role !== "paid") ? "paid" : prev.role
+
+      return { ...prev, paidSubjects: newSubjects, role: newRole }
+    })
   }
 
   return (
@@ -114,7 +124,7 @@ export default function AdminUsers() {
 
         {/* 权限编辑面板 */}
         {selectedUser && (
-          <div className="w-80 bg-white rounded-2xl border border-gray-200 p-6 h-fit">
+          <div className="w-80 bg-white rounded-2xl border border-gray-200 p-6 h-fit sticky top-4 max-h-[90vh] overflow-y-auto">
             <h2 className="font-bold text-gray-800 mb-1">{selectedUser.name}</h2>
             <p className="text-sm text-gray-400 mb-4">{selectedUser.email}</p>
 
@@ -160,16 +170,14 @@ export default function AdminUsers() {
                   <div className="space-y-1">
                     {SUBJECTS_BY_FORM[form].map(subject => {
                       const key = `${subject}_form${form}`
-                      const checked = selectedUser.paidSubjects?.includes(key)
+                      const checked = selectedUser.paidSubjects?.includes(key) || false
                       return (
                         <label key={key} className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"
-                            checked={checked || false}
-                            onChange={() => {
-                              toggleSubject(subject, form)
-                              if (!checked) setSelectedUser(prev => ({ ...prev, role: "paid" }))
-                            }}
+                            checked={checked}
+                            // FIX: 只调用 toggleSubject，role 更新已在 toggleSubject 内处理
+                            onChange={() => toggleSubject(subject, form)}
                             className="text-blue-600"
                           />
                           <span className="text-xs text-gray-700">{subject}</span>

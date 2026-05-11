@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext"
 import { Lock, Download, Eye } from "lucide-react"
 import { supabaseAdmin } from "../supabase"
 import toast from "react-hot-toast"
+import PurchaseModal from "./PurchaseModal"
 
 function canAccess(user, userData, material) {
   if (material.type === "trial" || material.type === "pastyear") return true
@@ -36,14 +37,13 @@ const TABS = [
 
 export default function SubjectPage() {
   const { formId, subjectId } = useParams()
-  const { user } = useAuth()
+  const { user, userData } = useAuth()
   const navigate = useNavigate()
   const [subject, setSubject] = useState(null)
   const [materials, setMaterials] = useState([])
-  const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("all")
-  const [showPaywall, setShowPaywall] = useState(false)
+  const [showPurchase, setShowPurchase] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -64,14 +64,10 @@ export default function SubjectPage() {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
       data.sort((a, b) => (a.chapter || a.year || 0) - (b.chapter || b.year || 0))
       setMaterials(data)
-      if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-        if (userDoc.exists()) setUserData(userDoc.data())
-      }
       setLoading(false)
     }
     fetchData()
-  }, [formId, subjectId, user])
+  }, [formId, subjectId])
 
   const handleView = async (material) => {
     const accessible = canAccess(user, userData, material)
@@ -84,16 +80,11 @@ export default function SubjectPage() {
       }
       return
     }
-
     try {
       const url = material.filePath
         ? supabaseAdmin.storage.from("materials").getPublicUrl(material.filePath).data.publicUrl
         : material.fileUrl
-
-      if (!url) {
-        throw new Error("No file URL available")
-      }
-
+      if (!url) throw new Error("No file URL available")
       window.open(url, "_blank")
     } catch (err) {
       toast.error("查阅失败 / View failed")
@@ -111,16 +102,11 @@ export default function SubjectPage() {
       }
       return
     }
-
     try {
       const url = material.filePath
         ? supabaseAdmin.storage.from("materials").getPublicUrl(material.filePath).data.publicUrl
         : material.fileUrl
-
-      if (!url) {
-        throw new Error("No file URL available")
-      }
-
+      if (!url) throw new Error("No file URL available")
       toast.loading("下载中... / Downloading...")
       const response = await fetch(url)
       const blob = await response.blob()
@@ -146,6 +132,8 @@ export default function SubjectPage() {
   const filtered = activeTab === "all"
     ? materials
     : materials.filter(m => m.type === activeTab)
+
+  const subjectName = subject?.name || ""
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f0f4f8" }}>
@@ -249,11 +237,11 @@ export default function SubjectPage() {
                       </>
                     ) : (
                       <button
-                        onClick={() => setShowPaywall(true)}
+                        onClick={() => setShowPurchase(true)}
                         className="flex items-center gap-1.5 bg-gray-100 text-gray-600 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition"
                       >
                         <Lock size={14} />
-                        解锁
+                        解锁 / Unlock
                       </button>
                     )}
                   </div>
@@ -264,50 +252,14 @@ export default function SubjectPage() {
         )}
       </div>
 
-      {showPaywall && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">解锁完整内容 🔓</h2>
-            <p className="text-gray-500 mb-6">购买后即可访问所有章节的笔记与练习</p>
-            <div className="space-y-3 mb-6">
-              <div className="border border-gray-200 rounded-xl p-4 hover:border-blue-400 cursor-pointer transition">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-gray-800">单科目 / Single Subject</p>
-                    <p className="text-sm text-gray-500">全部章节笔记与练习</p>
-                  </div>
-                  <p className="text-xl font-bold text-blue-600">RM 25</p>
-                </div>
-              </div>
-              <div className="border-2 border-blue-500 bg-blue-50 rounded-xl p-4 cursor-pointer transition">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-gray-800">年级套餐 / Form Package</p>
-                    <p className="text-sm text-gray-500">Form {formId} 全部科目</p>
-                  </div>
-                  <p className="text-xl font-bold text-blue-600">RM 100</p>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowPaywall(false)}
-                className="flex-1 border border-gray-200 py-2.5 rounded-xl text-gray-600 hover:bg-gray-50 transition"
-              >
-                稍后再说
-              </button>
-              <a
-                href="https://wa.me/601154150610?text=Hi%2C%20I%20want%20to%20purchase%20MyNotes%20package"
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-center font-semibold hover:bg-green-600 transition"
-              >
-                WhatsApp 购买
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
+      <PurchaseModal
+        open={showPurchase}
+        onClose={() => setShowPurchase(false)}
+        userData={userData}
+        defaultForm={formId}
+        defaultSubject={subjectName}
+        defaultPackage="subject"
+      />
     </div>
   )
 }
