@@ -33,7 +33,6 @@ export default function AdminUsers() {
     try {
       await updateDoc(doc(db, "users", selectedUser.id), {
         role: selectedUser.role,
-        // FIX: 明确处理 null，避免 undefined 写入 Firestore
         paidPackage: selectedUser.paidPackage ?? null,
         paidSubjects: selectedUser.paidSubjects || [],
       })
@@ -41,7 +40,6 @@ export default function AdminUsers() {
       fetchUsers()
       setSelectedUser(null)
     } catch (err) {
-      // FIX: 加上 console.error 方便 debug
       console.error("Update failed:", err)
       toast.error("更新失败 / Update failed: " + err.message)
     } finally {
@@ -49,7 +47,6 @@ export default function AdminUsers() {
     }
   }
 
-  // FIX: 把 paidSubjects 和 role 的更新合并到一次 setSelectedUser，避免 race condition
   function toggleSubject(subject, form) {
     const key = `${subject}_form${form}`
     setSelectedUser(prev => {
@@ -59,8 +56,8 @@ export default function AdminUsers() {
         ? current.filter(s => s !== key)
         : [...current, key]
 
-      // 如果勾选了科目，自动把 role 升为 paid
-      const newRole = (!isChecked && prev.role !== "paid") ? "paid" : prev.role
+      // ✅ 有套餐或有任何单科目解锁，role 都应该是 paid
+      const newRole = (prev.paidPackage || newSubjects.length > 0) ? "paid" : "free"
 
       return { ...prev, paidSubjects: newSubjects, role: newRole }
     })
@@ -146,10 +143,11 @@ export default function AdminUsers() {
                       type="radio"
                       name="package"
                       checked={selectedUser.paidPackage === pkg.value}
-                      onChange={() => setSelectedUser({
-                        ...selectedUser,
-                        paidPackage: pkg.value,
-                        role: pkg.value ? "paid" : "free"
+                      onChange={() => setSelectedUser(prev => {
+                        const newPackage = pkg.value
+                        // ✅ 取消套餐时，如果还有 paidSubjects，role 保持 paid
+                        const newRole = (newPackage || prev.paidSubjects?.length > 0) ? "paid" : "free"
+                        return { ...prev, paidPackage: newPackage, role: newRole }
                       })}
                       className="text-blue-600"
                     />
@@ -176,7 +174,6 @@ export default function AdminUsers() {
                           <input
                             type="checkbox"
                             checked={checked}
-                            // FIX: 只调用 toggleSubject，role 更新已在 toggleSubject 内处理
                             onChange={() => toggleSubject(subject, form)}
                             className="text-blue-600"
                           />
@@ -187,6 +184,14 @@ export default function AdminUsers() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* 当前 role 预览 */}
+            <div className="mb-4 px-3 py-2 bg-gray-50 rounded-lg text-xs text-gray-500">
+              保存后 role：
+              <span className={`ml-1 font-semibold ${selectedUser.role === "paid" ? "text-yellow-600" : "text-gray-400"}`}>
+                {selectedUser.role}
+              </span>
             </div>
 
             <div className="flex gap-2">
