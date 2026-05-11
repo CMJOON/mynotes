@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { collection, addDoc, getDocs } from "firebase/firestore"
 import { db } from "../../firebase"
-import { supabaseAdmin } from "../../supabase"
+import { supabase } from "../../supabase"   // ✅ 改用 anon key 的普通客户端，删除 supabaseAdmin
 import toast from "react-hot-toast"
 import { Upload } from "lucide-react"
 
@@ -38,13 +38,29 @@ export default function AdminUpload() {
     setUploading(true)
 
     try {
+      // ✅ 第二步：改为调用 Edge Function，不在前端持有 Service Key
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error("未登录 / Not logged in")
+
       const fileName = `${Date.now()}_${file.name.replace(/\s/g, "_")}`
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from("materials")
-        .upload(fileName, file, { contentType: "application/pdf" })
 
-      if (uploadError) throw uploadError
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("fileName", fileName)
 
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-material`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: formData,
+        }
+      )
+
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "上传失败 / Upload failed")
+
+      // ✅ 上传成功后，把元数据写入 Firestore（不变）
       await addDoc(collection(db, "materials"), {
         title: form.title,
         type: form.type,
