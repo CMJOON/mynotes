@@ -4,7 +4,7 @@ import { collection, getDocs } from "firebase/firestore"
 import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
 import { Lock, Download, Eye, Search } from "lucide-react"
-import { supabaseAdmin } from "../supabase"
+import { supabase } from "../supabase"   // ✅ 改用普通 supabase（anon key）
 import toast from "react-hot-toast"
 import { canAccess } from "../utils/access"
 
@@ -39,8 +39,6 @@ export default function SearchPage() {
     fetchResults()
   }, [query, user])
 
-  // userData 已通过 useAuth() 实时获取，无需额外 Firestore 查询
-
   const handleView = async (material) => {
     if (!user) {
       toast.error("请先登录 / Please login first")
@@ -48,8 +46,9 @@ export default function SearchPage() {
       return
     }
     try {
+      // ✅ getPublicUrl 不需要 Service Key，anon key 就够
       if (material.filePath) {
-        const { data } = supabaseAdmin.storage
+        const { data } = supabase.storage
           .from("materials")
           .getPublicUrl(material.filePath)
         window.open(data.publicUrl, "_blank")
@@ -69,32 +68,27 @@ export default function SearchPage() {
     }
     try {
       let url = ""
+      // ✅ getPublicUrl 不需要 Service Key
       if (material.filePath) {
-        const { data } = supabaseAdmin.storage
+        const { data } = supabase.storage
           .from("materials")
           .getPublicUrl(material.filePath)
         url = data.publicUrl
       } else {
         url = material.fileUrl
       }
-      toast.loading("下载中... / Downloading...")
-      const response = await fetch(url)
-      const blob = await response.blob()
-      const blobUrl = window.URL.createObjectURL(blob)
+
+      // ✅ 用 <a> 标签直接触发浏览器下载，不把大文件加载进内存
       const link = document.createElement("a")
-      link.href = blobUrl
+      link.href = url
       link.setAttribute("download", material.title + ".pdf")
+      link.setAttribute("target", "_blank")
       link.style.display = "none"
       document.body.appendChild(link)
       link.click()
-      setTimeout(() => {
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(blobUrl)
-      }, 100)
-      toast.dismiss()
-      toast.success("下载成功！/ Downloaded!")
+      setTimeout(() => document.body.removeChild(link), 100)
+      toast.success("下载已开始！/ Download started!")
     } catch (err) {
-      toast.dismiss()
       toast.error("下载失败 / Download failed")
     }
   }

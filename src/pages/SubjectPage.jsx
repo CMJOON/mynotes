@@ -4,7 +4,7 @@ import { collection, query, where, getDocs, doc, getDoc } from "firebase/firesto
 import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
 import { Lock, Download, Eye } from "lucide-react"
-import { supabaseAdmin } from "../supabase"
+import { supabase } from "../supabase"   // ✅ 改用普通 supabase（anon key）
 import toast from "react-hot-toast"
 import PurchaseModal from "./PurchaseModal"
 import { canAccess } from "../utils/access"
@@ -23,6 +23,17 @@ const TABS = [
   { key: "trial", zh: "Trial", en: "Trial" },
   { key: "pastyear", zh: "Past Year", en: "Past Year" },
 ]
+
+// ✅ 抽取成共用函数，SearchPage 和 SubjectPage 都可以用
+function getFileUrl(material) {
+  if (material.filePath) {
+    const { data } = supabase.storage
+      .from("materials")
+      .getPublicUrl(material.filePath)
+    return data.publicUrl
+  }
+  return material.fileUrl || null
+}
 
 export default function SubjectPage() {
   const { formId, subjectId } = useParams()
@@ -65,14 +76,13 @@ export default function SubjectPage() {
         toast.error("请先登录 / Please login first")
         navigate("/login")
       } else {
-        toast.error("访问受限 / Access denied")
+        toast.error("请先购买此科目 / Please unlock this subject first")
+        setShowPurchase(true)
       }
       return
     }
     try {
-      const url = material.filePath
-        ? supabaseAdmin.storage.from("materials").getPublicUrl(material.filePath).data.publicUrl
-        : material.fileUrl
+      const url = getFileUrl(material)
       if (!url) throw new Error("No file URL available")
       window.open(url, "_blank")
     } catch (err) {
@@ -87,33 +97,26 @@ export default function SubjectPage() {
         toast.error("请先登录 / Please login first")
         navigate("/login")
       } else {
-        toast.error("访问受限 / Access denied")
+        toast.error("请先购买此科目 / Please unlock this subject first")
+        setShowPurchase(true)
       }
       return
     }
     try {
-      const url = material.filePath
-        ? supabaseAdmin.storage.from("materials").getPublicUrl(material.filePath).data.publicUrl
-        : material.fileUrl
+      const url = getFileUrl(material)
       if (!url) throw new Error("No file URL available")
-      toast.loading("下载中... / Downloading...")
-      const response = await fetch(url)
-      const blob = await response.blob()
-      const blobUrl = window.URL.createObjectURL(blob)
+
+      // ✅ 用 <a> 标签直接触发浏览器下载，不把大文件加载进内存
       const link = document.createElement("a")
-      link.href = blobUrl
+      link.href = url
       link.setAttribute("download", material.title + ".pdf")
+      link.setAttribute("target", "_blank")
       link.style.display = "none"
       document.body.appendChild(link)
       link.click()
-      setTimeout(() => {
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(blobUrl)
-      }, 100)
-      toast.dismiss()
-      toast.success("下载成功！/ Downloaded!")
+      setTimeout(() => document.body.removeChild(link), 100)
+      toast.success("下载已开始！/ Download started!")
     } catch (err) {
-      toast.dismiss()
       toast.error("下载失败 / Download failed")
     }
   }

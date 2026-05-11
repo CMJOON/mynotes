@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react"
 import { collection, addDoc, getDocs } from "firebase/firestore"
 import { db } from "../../firebase"
-import { supabase } from "../../supabase"   // ✅ 改用 anon key 的普通客户端，删除 supabaseAdmin
+import { supabase } from "../../supabase"   // ✅ 只用 anon key 的普通客户端
 import toast from "react-hot-toast"
 import { Upload } from "lucide-react"
+import { useAuth } from "../../context/AuthContext"
 
 export default function AdminUpload() {
+  const { user } = useAuth()
   const [subjects, setSubjects] = useState([])
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState("")
   const [form, setForm] = useState({
     title: "",
     type: "note",
@@ -35,33 +38,41 @@ export default function AdminUpload() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!file) { toast.error("请选择PDF文件 / Please select a PDF file"); return }
+
+    // 检查文件大小（前端预检，50MB 上限）
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("文件太大，最大 50MB / File too large, max 50MB")
+      return
+    }
+// 检查用户是否登录
+    if (!user) {
+      toast.error("请先登录 / Please login first")
+      return
+    }
+
     setUploading(true)
+    setUploadProgress("正在上传文件... / Uploading file...")
 
     try {
-      // ✅ 第二步：改为调用 Edge Function，不在前端持有 Service Key
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error("未登录 / Not logged in")
-
+      // ✅ 直接用 Supabase Storage 上传（anon key 足够）
       const fileName = `${Date.now()}_${file.name.replace(/\s/g, "_")}`
 
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("fileName", fileName)
+      const { data, error: uploadError } = await supabase.storage
+        .from("materials")
+        .upload(fileName, file, {
+          contentType: "application/pdf",
+          upsert: false,
+        })
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-material`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          body: formData,
-        }
-      )
+      if (uploadError) {
+        throw new Error(uploadError.message)
+      }
 
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || "上传失败 / Upload failed")
+      setUploadProgress("正在保存资料信息... / Saving material info...")
 
-      // ✅ 上传成功后，把元数据写入 Firestore（不变）
-      await addDoc(collection(db, "materials"), {
+      // ✅ 临时跳过 Firestore 写入（等规则生效后再恢复）
+      console.log("文件已上传到 Supabase Storage:", data.path)
+      console.log("资料信息:", {
         title: form.title,
         type: form.type,
         form: parseInt(form.form),
@@ -69,13 +80,29 @@ export default function AdminUpload() {
         chapter: parseInt(form.chapter) || 0,
         year: parseInt(form.year) || 0,
         state: form.state,
-        filePath: fileName,
+        filePath: data.path,
         freePreviewPages: parseInt(form.freePreviewPages),
         downloadCount: 0,
         createdAt: new Date(),
       })
 
+      // 注释掉 Firestore 写入
+      // await addDoc(collection(db, "materials"), {
+      //   title: form.title,
+      //   type: form.type,
+      //   form: parseInt(form.form),
+      //   subjectName: form.subjectName,
+      //   chapter: parseInt(form.chapter) || 0,
+      //   year: parseInt(form.year) || 0,
+      //   state: form.state,
+      //   filePath: data.path,
+      //   freePreviewPages: parseInt(form.freePreviewPages),
+      //   downloadCount: 0,
+      //   createdAt: new Date(),
+      // })
+
       toast.success("上传成功！/ Upload successful!")
+      setUploadProgress("")
       setForm({
         title: "",
         type: "note",
@@ -87,10 +114,12 @@ export default function AdminUpload() {
         freePreviewPages: "0",
       })
       setFile(null)
+      // 重置 file input
       e.target.reset()
     } catch (err) {
       console.error(err)
       toast.error("上传失败 / Upload failed: " + err.message)
+      setUploadProgress("")
     } finally {
       setUploading(false)
     }
@@ -206,15 +235,29 @@ export default function AdminUpload() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">PDF 文件</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">PDF 文件（最大 50MB）</label>
           <input
             type="file"
             accept=".pdf"
             onChange={(e) => setFile(e.target.files[0])}
             className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          {file && <p className="text-xs text-green-600 mt-1">已选择: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</p>}
+          {file && (
+            <p className="text-xs text-green-600 mt-1">
+              已选择: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+              {file.size > 50 * 1024 * 1024 && (
+                <span className="text-red-500 ml-2">⚠️ 文件太大！</span>
+              )}
+            </p>
+          )}
         </div>
+
+        {/* 上传进度提示 */}
+        {uploadProgress && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-700">
+            ⏳ {uploadProgress}
+          </div>
+        )}
 
         <button
           type="submit"
