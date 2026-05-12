@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { auth, db, googleProvider } from "../firebase"
@@ -15,6 +15,9 @@ export default function Register() {
   const [otpLoading, setOtpLoading] = useState(false)
   const [otp, setOtp] = useState("")
   const [phone, setPhone] = useState("")
+
+  // ✅ 修复：用 ref 保存 RecaptchaVerifier 实例，避免重复创建
+  const recaptchaVerifierRef = useRef(null)
 
   const [form, setForm] = useState({
     name: "",
@@ -94,13 +97,29 @@ export default function Register() {
     }
     setOtpLoading(true)
     try {
-      const recaptcha = new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" })
+      // ✅ 修复：如果已有实例先清除，再创建新的
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear()
+        recaptchaVerifierRef.current = null
+      }
+
+      recaptchaVerifierRef.current = new RecaptchaVerifier(
+        auth,
+        "recaptcha-container",
+        { size: "invisible" }
+      )
+
       const fullPhone = "+60" + phone.replace(/^0/, "")
-      const result = await signInWithPhoneNumber(auth, fullPhone, recaptcha)
+      const result = await signInWithPhoneNumber(auth, fullPhone, recaptchaVerifierRef.current)
       setConfirmResult(result)
       setOtpSent(true)
       toast.success("验证码已发送！/ OTP sent!")
     } catch (err) {
+      // ✅ 出错时也清除实例，允许用户重试
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear()
+        recaptchaVerifierRef.current = null
+      }
       toast.error("发送失败 / Failed to send OTP: " + err.message)
     } finally {
       setOtpLoading(false)
@@ -127,6 +146,20 @@ export default function Register() {
       toast.error("验证码错误 / Invalid OTP")
     } finally {
       setOtpLoading(false)
+    }
+  }
+
+  // ✅ 切换 tab 时重置手机登录状态
+  const handleTabChange = (newTab) => {
+    setTab(newTab)
+    if (newTab !== "phone") {
+      setOtpSent(false)
+      setOtp("")
+      setPhone("")
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear()
+        recaptchaVerifierRef.current = null
+      }
     }
   }
 
@@ -162,7 +195,7 @@ export default function Register() {
         {/* Tab 切换 */}
         <div className="flex border border-gray-200 rounded-lg p-1 mb-4">
           <button
-            onClick={() => setTab("email")}
+            onClick={() => handleTabChange("email")}
             className={`flex-1 py-1.5 text-sm rounded-md font-medium transition ${
               tab === "email" ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-700"
             }`}
@@ -170,7 +203,7 @@ export default function Register() {
             邮箱 / Email
           </button>
           <button
-            onClick={() => setTab("phone")}
+            onClick={() => handleTabChange("phone")}
             className={`flex-1 py-1.5 text-sm rounded-md font-medium transition ${
               tab === "phone" ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-700"
             }`}

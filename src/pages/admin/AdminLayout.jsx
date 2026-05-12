@@ -3,7 +3,7 @@ import { Link, Outlet, useNavigate } from "react-router-dom"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "../../firebase"
 import { useAuth } from "../../context/AuthContext"
-import { LayoutDashboard, Upload, FileText, LogOut, Users, Home, BookOpen } from "lucide-react"
+import { LayoutDashboard, Upload, FileText, LogOut, Users, Home } from "lucide-react"
 import { signOut } from "firebase/auth"
 import { auth } from "../../firebase"
 
@@ -54,9 +54,7 @@ export default function AdminLayout() {
           <Link to="/admin/materials" className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm">
             <FileText size={16} /> 管理资料 / Materials
           </Link>
-          <Link to="/admin/subjects" className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm">
-            <BookOpen size={16} /> 科目管理 / Subjects
-          </Link>
+          {/* ✅ 已删除：科目管理 / Subjects 链接 */}
           <Link to="/admin/users" className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition text-sm">
             <Users size={16} /> 用户管理 / Users
           </Link>

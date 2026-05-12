@@ -44,8 +44,8 @@ export default function CompleteProfile() {
         createdAt: new Date()
       })
       toast.success("设置完成！/ Profile completed!")
-      // 强制刷新页面让 AuthContext 重新读取数据
-      window.location.href = "/"
+      // ✅ 修复：使用 React Router navigate，不强制刷新整个页面
+      navigate("/", { replace: true })
     } catch (err) {
       console.error(err)
       toast.error("保存失败 / Failed to save: " + err.message)

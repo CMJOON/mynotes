@@ -16,19 +16,17 @@ import AdminDashboard from "./pages/admin/AdminDashboard"
 import AdminUpload from "./pages/admin/AdminUpload"
 import AdminMaterials from "./pages/admin/AdminMaterials"
 import AdminUsers from "./pages/admin/AdminUsers"
-import AdminSubjects from "./pages/admin/AdminSubjects"
+// ✅ 已删除：import AdminSubjects（不再需要）
 
 function RequireProfile({ children }) {
   const { user, userData, loading } = useAuth()
   const location = useLocation()
 
-  // 数据还在加载中时不做任何跳转
   if (loading) return null
 
   const skipRoutes = ["/complete-profile", "/verify-email", "/login", "/register"]
   if (skipRoutes.includes(location.pathname)) return children
 
-  // 已登录但未填写姓名，跳转到完善资料页
   if (user && userData !== null && !userData?.name) {
     return <Navigate to="/complete-profile" replace />
   }
@@ -55,7 +53,7 @@ function App() {
             <Route path="upload" element={<AdminUpload />} />
             <Route path="materials" element={<AdminMaterials />} />
             <Route path="users" element={<AdminUsers />} />
-            <Route path="subjects" element={<AdminSubjects />} />
+            {/* ✅ 已删除：/admin/subjects 路由 */}
           </Route>
           <Route path="*" element={<><Navbar /><NotFound /></>} />
         </Routes>
