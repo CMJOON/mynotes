@@ -36,13 +36,11 @@ export default function SubjectPage() {
     async function fetchData() {
       setLoading(true)
       try {
-        // 获取科目信息
         const subjectDoc = await getDoc(doc(db, "subjects", subjectId))
         if (subjectDoc.exists()) {
           setSubject({ id: subjectDoc.id, ...subjectDoc.data() })
         }
 
-        // 获取资料列表
         const q = query(
           collection(db, "materials"),
           where("form", "==", parseInt(formId)),
@@ -144,7 +142,7 @@ export default function SubjectPage() {
           <div className="space-y-3">
             {filtered.map(material => {
               const accessible = canAccess(user, userData, material)
-              const isFree = material.type === "trial" || material.type === "pastyear" || material.chapter <= 3
+              const isFree = material.type === "trial" || material.type === "pastyear" || material.isFree
 
               return (
                 <div

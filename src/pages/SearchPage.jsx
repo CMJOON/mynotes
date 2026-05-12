@@ -88,7 +88,7 @@ export default function SearchPage() {
           <div className="space-y-3">
             {results.map(material => {
               const accessible = canAccess(user, userData, material)
-              const isFree = material.type === "trial" || material.type === "pastyear" || material.chapter <= 3
+              const isFree = material.type === "trial" || material.type === "pastyear" || material.isFree
 
               return (
                 <div

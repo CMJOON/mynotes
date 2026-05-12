@@ -72,8 +72,8 @@ export default function FormPage() {
                 </h3>
                 <p className="text-sm text-gray-500">{subject.nameZh}</p>
                 <div className="mt-4 flex items-center gap-2">
-                  <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full font-medium">
-                    前{subject.freeChapterLimit}章免费
+                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full font-medium">
+                    部分免费 / Partial Free
                   </span>
                 </div>
               </Link>

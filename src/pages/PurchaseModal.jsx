@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import { X, ChevronDown } from "lucide-react"
 import { PRICING } from "../utils/constants"
+import { collection, getDocs, query, where } from "firebase/firestore"
+import { db } from "../firebase"
 
 const WHATSAPP_NUMBER = "601174470610"
 
@@ -54,11 +56,13 @@ export default function PurchaseModal({
     setSubject(defaultSubject || "")
     ;(async () => {
       try {
-        const response = await fetch("http://localhost:3001/api/subjects")
-        const subjects = await response.json()
-        const list = subjects
-          .filter(s => !s.form || String(s.form) === String(form))
-          .map(s => s.name)
+        const q = query(
+          collection(db, "subjects"),
+          where("form", "==", parseInt(form))
+        )
+        const snapshot = await getDocs(q)
+        const list = snapshot.docs
+          .map(d => d.data().name)
           .filter(Boolean)
           .sort()
         setSubjectList(list)

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import toast from "react-hot-toast"
 import { Crown, User } from "lucide-react"
+import { collection, getDocs, doc, updateDoc } from "firebase/firestore"
+import { db } from "../../firebase"
 
 const SUBJECTS_BY_FORM = {
   1: ["Mathematics", "Science", "Sejarah", "Bahasa Melayu", "English", "Moral", "Chinese"],
@@ -17,10 +19,16 @@ export default function AdminUsers() {
   const [saving, setSaving] = useState(false)
 
   async function fetchUsers() {
-    // Since we switched to local database, user management is now handled differently
-    // This is a placeholder - in a real implementation, you'd have a users table in SQLite
-    setUsers([])
-    setLoading(false)
+    try {
+      const snapshot = await getDocs(collection(db, "users"))
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+      data.sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+      setUsers(data)
+    } catch (err) {
+      toast.error("加载用户失败 / Failed to load users")
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchUsers() }, [])
@@ -29,7 +37,11 @@ export default function AdminUsers() {
     if (!selectedUser) return
     setSaving(true)
     try {
-      // Placeholder - user permissions are now managed locally
+      await updateDoc(doc(db, "users", selectedUser.id), {
+        role: selectedUser.role,
+        paidPackage: selectedUser.paidPackage || null,
+        paidSubjects: selectedUser.paidSubjects || [],
+      })
       toast.success("权限已更新 / Permission updated!")
       fetchUsers()
       setSelectedUser(null)

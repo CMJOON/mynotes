@@ -1,9 +1,12 @@
 import { useState } from "react"
 import { useAuth } from "../context/AuthContext"
 import { useNavigate } from "react-router-dom"
-import { User, ShoppingBag, Crown, BookOpen, Package, Star } from "lucide-react"
+import { User, ShoppingBag, Crown, BookOpen, Package, Star, RefreshCw } from "lucide-react"
 import PurchaseModal from "./PurchaseModal"
 import { PRICING } from "../utils/constants"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "../firebase"
+import toast from "react-hot-toast"
 
 const TABS = [
   { key: "profile", zh: "我的资料", en: "Profile", icon: User },
@@ -37,10 +40,23 @@ function groupSubjectsByForm(paidSubjects = []) {
 }
 
 export default function Dashboard() {
-  const { user, userData, loading } = useAuth()
+  const { user, userData, loading, refreshUserData } = useAuth()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState("profile")
   const [showPurchase, setShowPurchase] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await refreshUserData()
+      toast.success("权限已刷新 / Permissions refreshed!")
+    } catch {
+      toast.error("刷新失败 / Refresh failed")
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -65,25 +81,37 @@ export default function Dashboard() {
 
       {/* Header */}
       <div style={{ backgroundColor: "#e8eef4" }} className="border-b border-gray-200 px-4 py-10">
-        <div className="max-w-4xl mx-auto flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-bold">
-            {userData?.name?.charAt(0)?.toUpperCase() || "U"}
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{userData?.name}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-gray-500 text-sm">{userData?.email}</span>
-              {userData?.role === "paid" ? (
-                <span className="text-xs bg-yellow-100 text-yellow-600 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                  <Crown size={10} /> 付费会员
-                </span>
-              ) : (
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">
-                  免费用户
-                </span>
-              )}
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-bold">
+              {userData?.name?.charAt(0)?.toUpperCase() || "U"}
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{userData?.name}</h1>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-gray-500 text-sm">{userData?.email}</span>
+                {userData?.role === "paid" ? (
+                  <span className="text-xs bg-yellow-100 text-yellow-600 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                    <Crown size={10} /> 付费会员
+                  </span>
+                ) : (
+                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">
+                    免费用户
+                  </span>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* 刷新权限按钮 */}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 text-sm text-gray-500 border border-gray-200 bg-white px-4 py-2 rounded-lg hover:border-blue-400 hover:text-blue-600 transition disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "刷新中..." : "刷新权限 / Refresh"}
+          </button>
         </div>
       </div>
 

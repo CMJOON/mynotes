@@ -10,16 +10,20 @@ export function AuthProvider({ children }) {
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  async function fetchUserData(firebaseUser) {
+    try {
+      const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
+      setUserData(userDoc.exists() ? userDoc.data() : null)
+    } catch {
+      setUserData(null)
+    }
+  }
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser)
-        try {
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
-          setUserData(userDoc.exists() ? userDoc.data() : null)
-        } catch {
-          setUserData(null)
-        }
+        await fetchUserData(firebaseUser)
       } else {
         setUser(null)
         setUserData(null)
@@ -29,8 +33,13 @@ export function AuthProvider({ children }) {
     return () => unsubscribe()
   }, [])
 
+  async function refreshUserData() {
+    if (!user) return
+    await fetchUserData(user)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, userData, loading }}>
+    <AuthContext.Provider value={{ user, userData, loading, refreshUserData }}>
       {!loading && children}
     </AuthContext.Provider>
   )

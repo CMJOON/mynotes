@@ -16,6 +16,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard"
 import AdminUpload from "./pages/admin/AdminUpload"
 import AdminMaterials from "./pages/admin/AdminMaterials"
 import AdminUsers from "./pages/admin/AdminUsers"
+import AdminSubjects from "./pages/admin/AdminSubjects"
 
 function RequireProfile({ children }) {
   const { user, userData, loading } = useAuth()
@@ -54,6 +55,7 @@ function App() {
             <Route path="upload" element={<AdminUpload />} />
             <Route path="materials" element={<AdminMaterials />} />
             <Route path="users" element={<AdminUsers />} />
+            <Route path="subjects" element={<AdminSubjects />} />
           </Route>
           <Route path="*" element={<><Navbar /><NotFound /></>} />
         </Routes>

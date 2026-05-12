@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react"
-import { collection, addDoc, getDocs, query, where } from "firebase/firestore"
+import { collection, addDoc, getDocs } from "firebase/firestore"
 import { db } from "../../firebase"
 import toast from "react-hot-toast"
 import { Upload } from "lucide-react"
 
-const CLOUDINARY_CLOUD_NAME = "your_cloud_name"   // ← 填你的 Cloudinary cloud name
-const CLOUDINARY_UPLOAD_PRESET = "your_preset"    // ← 填你的 unsigned upload preset
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
 
 export default function AdminUpload() {
   const [subjects, setSubjects] = useState([])
@@ -20,11 +20,10 @@ export default function AdminUpload() {
     chapter: "",
     year: "",
     state: "",
-    freePreviewPages: "0",
+    isFree: true,
   })
   const [file, setFile] = useState(null)
 
-  // 从 Firestore 获取科目列表
   useEffect(() => {
     async function fetchSubjects() {
       try {
@@ -69,11 +68,10 @@ export default function AdminUpload() {
     setUploadProgress("正在上传到 Cloudinary...")
 
     try {
-      // 上传 PDF 到 Cloudinary
       const formData = new FormData()
       formData.append("file", file)
       formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET)
-      formData.append("resource_type", "raw") // PDF 用 raw
+      formData.append("resource_type", "raw")
 
       const cloudRes = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`,
@@ -86,7 +84,6 @@ export default function AdminUpload() {
 
       setUploadProgress("正在保存资料信息...")
 
-      // 保存资料信息到 Firestore
       await addDoc(collection(db, "materials"), {
         title: form.title,
         type: form.type,
@@ -97,7 +94,7 @@ export default function AdminUpload() {
         year: parseInt(form.year) || 0,
         state: form.state || "",
         fileUrl: fileUrl,
-        freePreviewPages: parseInt(form.freePreviewPages) || 0,
+        isFree: form.isFree,
         downloadCount: 0,
         createdAt: new Date(),
       })
@@ -113,7 +110,7 @@ export default function AdminUpload() {
         chapter: "",
         year: "",
         state: "",
-        freePreviewPages: "0",
+        isFree: true,
       })
       setFile(null)
       e.target.reset()
@@ -132,10 +129,9 @@ export default function AdminUpload() {
     <div className="p-8 max-w-2xl">
       <h1 className="text-2xl font-bold text-gray-800 mb-8">上传资料 / Upload Material</h1>
 
-      {/* Cloudinary 未配置提示 */}
-      {CLOUDINARY_CLOUD_NAME === "your_cloud_name" && (
+      {(!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) && (
         <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm text-yellow-700">
-          ⚠️ 请先在代码顶部填入你的 Cloudinary Cloud Name 和 Upload Preset，才能上传文件。
+          ⚠️ 请先在 .env.local 填入 VITE_CLOUDINARY_CLOUD_NAME 和 VITE_CLOUDINARY_UPLOAD_PRESET，才能上传文件。
         </div>
       )}
 
@@ -235,18 +231,33 @@ export default function AdminUpload() {
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            免费预览页数 / Free Preview Pages
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            访问权限 / Access
           </label>
-          <input
-            type="number"
-            name="freePreviewPages"
-            value={form.freePreviewPages}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="0 = 全部免费"
-          />
-          <p className="text-xs text-gray-400 mt-1">0 = 完全免费 / Fully free</p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, isFree: true })}
+              className={`flex-1 py-2 rounded-lg border-2 text-sm font-semibold transition ${
+                form.isFree
+                  ? "border-green-500 bg-green-50 text-green-700"
+                  : "border-gray-200 text-gray-500 hover:border-gray-300"
+              }`}
+            >
+              免费 / Free
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, isFree: false })}
+              className={`flex-1 py-2 rounded-lg border-2 text-sm font-semibold transition ${
+                !form.isFree
+                  ? "border-orange-500 bg-orange-50 text-orange-700"
+                  : "border-gray-200 text-gray-500 hover:border-gray-300"
+              }`}
+            >
+              付费 / Paid
+            </button>
+          </div>
         </div>
 
         <div>
