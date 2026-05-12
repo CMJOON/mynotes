@@ -1,7 +1,10 @@
 import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 import { useState } from "react"
-import { Search } from "lucide-react"
+import { Search, LogOut, User, Shield } from "lucide-react"
+import { signOut } from "firebase/auth"
+import { auth } from "../firebase"
+import toast from "react-hot-toast"
 
 export default function Navbar() {
   const { user, userData } = useAuth()
@@ -11,8 +14,15 @@ export default function Navbar() {
 
   const handleSearch = (e) => {
     e.preventDefault()
+    if (!searchQuery.trim()) return
     navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
     setSearchQuery("")
+  }
+
+  const handleLogout = async () => {
+    await signOut(auth)
+    toast.success("已登出 / Logged out")
+    navigate("/")
   }
 
   return (
@@ -42,8 +52,48 @@ export default function Navbar() {
           </div>
         </form>
 
-        <div className="flex items-center gap-4 shrink-0">
-          {/* Authentication removed - now using local database */}
+        <div className="flex items-center gap-3 shrink-0">
+          {user ? (
+            <>
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className="flex items-center gap-1.5 text-sm text-purple-600 hover:text-purple-700 font-medium"
+                >
+                  <Shield size={15} /> Admin
+                </Link>
+              )}
+              <Link
+                to="/dashboard"
+                className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900"
+              >
+                <User size={15} />
+                {userData?.name?.split(" ")[0] || "Profile"}
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-500 transition"
+              >
+                <LogOut size={15} />
+                登出
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                className="text-sm text-gray-600 hover:text-gray-900 font-medium"
+              >
+                登录 / Login
+              </Link>
+              <Link
+                to="/register"
+                className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 transition font-medium"
+              >
+                注册 / Register
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </nav>

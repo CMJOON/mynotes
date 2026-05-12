@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from "react-router-dom"
+import { useParams, Link } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { db } from "../firebase"
@@ -23,17 +23,9 @@ const TABS = [
   { key: "pastyear", zh: "Past Year", en: "Past Year" },
 ]
 
-// 获取文件下载 URL
-function getFileUrl(material) {
-  if (material.filePath) {
-    return `http://localhost:3001/api/download/${material.filePath}`
-  }
-  return null
-}
-
 export default function SubjectPage() {
   const { formId, subjectId } = useParams()
-  const navigate = useNavigate()
+  const { user, userData } = useAuth()
   const [subject, setSubject] = useState(null)
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
@@ -45,18 +37,21 @@ export default function SubjectPage() {
       setLoading(true)
       try {
         // 获取科目信息
-        const subjectsResponse = await fetch("http://localhost:3001/api/subjects")
-        const subjects = await subjectsResponse.json()
-        const subjectData = subjects.find(s => s.id === subjectId)
-        setSubject(subjectData)
+        const subjectDoc = await getDoc(doc(db, "subjects", subjectId))
+        if (subjectDoc.exists()) {
+          setSubject({ id: subjectDoc.id, ...subjectDoc.data() })
+        }
 
         // 获取资料列表
-        const materialsResponse = await fetch(`http://localhost:3001/api/materials?form=${formId}&subject=${subjectData?.name || ''}`)
-        const materialsData = await materialsResponse.json()
-
-        // 排序资料
-        materialsData.sort((a, b) => (a.chapter || a.year || 0) - (b.chapter || b.year || 0))
-        setMaterials(materialsData)
+        const q = query(
+          collection(db, "materials"),
+          where("form", "==", parseInt(formId)),
+          where("subjectId", "==", subjectId)
+        )
+        const snapshot = await getDocs(q)
+        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+        data.sort((a, b) => (a.chapter || a.year || 0) - (b.chapter || b.year || 0))
+        setMaterials(data)
       } catch (error) {
         console.error("获取数据失败:", error)
         toast.error("获取数据失败 / Failed to load data")
@@ -67,37 +62,36 @@ export default function SubjectPage() {
     fetchData()
   }, [formId, subjectId])
 
-  const handleView = async (material) => {
-    try {
-      const url = material.filePath
-        ? `http://localhost:3001/api/download/${material.filePath}`
-        : material.fileUrl
-      if (!url) throw new Error("No file URL available")
-      window.open(url, "_blank")
-    } catch (err) {
-      toast.error("查阅失败 / View failed")
+  const handleView = (material) => {
+    if (!canAccess(user, userData, material)) {
+      setShowPurchase(true)
+      return
+    }
+    if (material.fileUrl) {
+      window.open(material.fileUrl, "_blank")
+    } else {
+      toast.error("文件不存在 / File not found")
     }
   }
 
-  const handleDownload = async (material) => {
-    try {
-      const url = material.filePath
-        ? `http://localhost:3001/api/download/${material.filePath}`
-        : material.fileUrl
-      if (!url) throw new Error("No file URL available")
-
-      const link = document.createElement("a")
-      link.href = url
-      link.setAttribute("download", material.title + ".pdf")
-      link.setAttribute("target", "_blank")
-      link.style.display = "none"
-      document.body.appendChild(link)
-      link.click()
-      setTimeout(() => document.body.removeChild(link), 100)
-      toast.success("下载已开始！/ Download started!")
-    } catch (err) {
-      toast.error("下载失败 / Download failed")
+  const handleDownload = (material) => {
+    if (!canAccess(user, userData, material)) {
+      setShowPurchase(true)
+      return
     }
+    if (!material.fileUrl) {
+      toast.error("文件不存在 / File not found")
+      return
+    }
+    const link = document.createElement("a")
+    link.href = material.fileUrl
+    link.setAttribute("download", material.title + ".pdf")
+    link.setAttribute("target", "_blank")
+    link.style.display = "none"
+    document.body.appendChild(link)
+    link.click()
+    setTimeout(() => document.body.removeChild(link), 100)
+    toast.success("下载已开始！/ Download started!")
   }
 
   const filtered = activeTab === "all"
@@ -158,11 +152,10 @@ export default function SubjectPage() {
                   className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between hover:shadow-sm transition"
                 >
                   <div className="flex items-center gap-3">
-                    {accessible ? (
-                      <span className="text-green-500"><Eye size={18} /></span>
-                    ) : (
-                      <span className="text-gray-400"><Lock size={18} /></span>
-                    )}
+                    {accessible
+                      ? <span className="text-green-500"><Eye size={18} /></span>
+                      : <span className="text-gray-400"><Lock size={18} /></span>
+                    }
                     <div>
                       <p className="font-medium text-gray-800">{material.title}</p>
                       <div className="flex items-center gap-2 mt-1">
@@ -175,15 +168,10 @@ export default function SubjectPage() {
                         {material.year > 0 && (
                           <span className="text-xs text-gray-400">· {material.year}</span>
                         )}
-                        {isFree ? (
-                          <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-medium">
-                            免费 / Free
-                          </span>
-                        ) : (
-                          <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">
-                            付费 / Paid
-                          </span>
-                        )}
+                        {isFree
+                          ? <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-medium">免费 / Free</span>
+                          : <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">付费 / Paid</span>
+                        }
                       </div>
                     </div>
                   </div>
@@ -195,15 +183,13 @@ export default function SubjectPage() {
                           onClick={() => handleView(material)}
                           className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition"
                         >
-                          <Eye size={14} />
-                          查阅
+                          <Eye size={14} /> 查阅
                         </button>
                         <button
                           onClick={() => handleDownload(material)}
                           className="flex items-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 transition"
                         >
-                          <Download size={14} />
-                          下载
+                          <Download size={14} /> 下载
                         </button>
                       </>
                     ) : (
@@ -211,8 +197,7 @@ export default function SubjectPage() {
                         onClick={() => setShowPurchase(true)}
                         className="flex items-center gap-1.5 bg-gray-100 text-gray-600 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition"
                       >
-                        <Lock size={14} />
-                        解锁 / Unlock
+                        <Lock size={14} /> 解锁 / Unlock
                       </button>
                     )}
                   </div>

@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react"
-import { collection, addDoc, getDocs } from "firebase/firestore"
+import { collection, addDoc, getDocs, query, where } from "firebase/firestore"
 import { db } from "../../firebase"
 import toast from "react-hot-toast"
 import { Upload } from "lucide-react"
+
+const CLOUDINARY_CLOUD_NAME = "your_cloud_name"   // ← 填你的 Cloudinary cloud name
+const CLOUDINARY_UPLOAD_PRESET = "your_preset"    // ← 填你的 unsigned upload preset
 
 export default function AdminUpload() {
   const [subjects, setSubjects] = useState([])
@@ -13,6 +16,7 @@ export default function AdminUpload() {
     type: "note",
     form: "5",
     subjectName: "",
+    subjectId: "",
     chapter: "",
     year: "",
     state: "",
@@ -20,12 +24,13 @@ export default function AdminUpload() {
   })
   const [file, setFile] = useState(null)
 
+  // 从 Firestore 获取科目列表
   useEffect(() => {
     async function fetchSubjects() {
       try {
-        const response = await fetch("http://localhost:3001/api/subjects")
-        const data = await response.json()
-        setSubjects(data.map(s => ({ id: s.id, ...s })))
+        const snapshot = await getDocs(collection(db, "subjects"))
+        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+        setSubjects(data)
       } catch (error) {
         console.error("获取科目失败:", error)
         toast.error("获取科目列表失败 / Failed to load subjects")
@@ -38,47 +43,61 @@ export default function AdminUpload() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
+  const handleSubjectChange = (e) => {
+    const selectedId = e.target.value
+    const selectedSubject = subjects.find(s => s.id === selectedId)
+    setForm({
+      ...form,
+      subjectId: selectedId,
+      subjectName: selectedSubject?.name || "",
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!file) { toast.error("请选择PDF文件 / Please select a PDF file"); return }
-
-    // 检查文件大小（前端预检，50MB 上限）
     if (file.size > 50 * 1024 * 1024) {
       toast.error("文件太大，最大 50MB / File too large, max 50MB")
       return
     }
+    if (!form.subjectId) {
+      toast.error("请选择科目 / Please select a subject")
+      return
+    }
 
     setUploading(true)
+    setUploadProgress("正在上传到 Cloudinary...")
 
     try {
-      const fileName = `${Date.now()}_${file.name.replace(/\s/g, "_")}`
-      const uploadData = new FormData()
-      uploadData.append("file", file)
-      uploadData.append("fileName", fileName)
+      // 上传 PDF 到 Cloudinary
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET)
+      formData.append("resource_type", "raw") // PDF 用 raw
 
-      const uploadResponse = await fetch("http://localhost:3001/api/upload", {
-        method: "POST",
-        body: uploadData,
-      })
+      const cloudRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`,
+        { method: "POST", body: formData }
+      )
 
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text()
-        throw new Error(errorText || "Upload failed")
-      }
+      if (!cloudRes.ok) throw new Error("Cloudinary 上传失败 / Cloudinary upload failed")
+      const cloudData = await cloudRes.json()
+      const fileUrl = cloudData.secure_url
 
-      const uploadResult = await uploadResponse.json()
-      const savedFilePath = uploadResult.filePath || fileName
+      setUploadProgress("正在保存资料信息...")
 
+      // 保存资料信息到 Firestore
       await addDoc(collection(db, "materials"), {
         title: form.title,
         type: form.type,
         form: parseInt(form.form),
+        subjectId: form.subjectId,
         subjectName: form.subjectName,
         chapter: parseInt(form.chapter) || 0,
         year: parseInt(form.year) || 0,
-        state: form.state,
-        filePath: savedFilePath,
-        freePreviewPages: parseInt(form.freePreviewPages),
+        state: form.state || "",
+        fileUrl: fileUrl,
+        freePreviewPages: parseInt(form.freePreviewPages) || 0,
         downloadCount: 0,
         createdAt: new Date(),
       })
@@ -90,13 +109,13 @@ export default function AdminUpload() {
         type: "note",
         form: "5",
         subjectName: "",
+        subjectId: "",
         chapter: "",
         year: "",
         state: "",
         freePreviewPages: "0",
       })
       setFile(null)
-      // 重置 file input
       e.target.reset()
     } catch (err) {
       console.error(err)
@@ -112,6 +131,13 @@ export default function AdminUpload() {
   return (
     <div className="p-8 max-w-2xl">
       <h1 className="text-2xl font-bold text-gray-800 mb-8">上传资料 / Upload Material</h1>
+
+      {/* Cloudinary 未配置提示 */}
+      {CLOUDINARY_CLOUD_NAME === "your_cloud_name" && (
+        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm text-yellow-700">
+          ⚠️ 请先在代码顶部填入你的 Cloudinary Cloud Name 和 Upload Preset，才能上传文件。
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
 
@@ -150,13 +176,20 @@ export default function AdminUpload() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">科目 / Subject</label>
-          <select name="subjectName" value={form.subjectName} onChange={handleChange} required
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select
+            value={form.subjectId}
+            onChange={handleSubjectChange}
+            required
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
             <option value="">选择科目 / Select subject</option>
             {filteredSubjects.map(s => (
-              <option key={s.id} value={s.name}>{s.name} - {s.nameZh}</option>
+              <option key={s.id} value={s.id}>{s.name} - {s.nameZh}</option>
             ))}
           </select>
+          {filteredSubjects.length === 0 && (
+            <p className="text-xs text-gray-400 mt-1">该年级暂无科目，请先在 Firestore 添加 subjects 数据</p>
+          )}
         </div>
 
         {(form.type === "note" || form.type === "exercise") && (
@@ -211,9 +244,9 @@ export default function AdminUpload() {
             value={form.freePreviewPages}
             onChange={handleChange}
             className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="0 = 全部免费, 3 = 仅前3页"
+            placeholder="0 = 全部免费"
           />
-          <p className="text-xs text-gray-400 mt-1">0 = 完全免费 / Fully free · 3 = 付费内容只预览前3页</p>
+          <p className="text-xs text-gray-400 mt-1">0 = 完全免费 / Fully free</p>
         </div>
 
         <div>
@@ -234,7 +267,6 @@ export default function AdminUpload() {
           )}
         </div>
 
-        {/* 上传进度提示 */}
         {uploadProgress && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-700">
             ⏳ {uploadProgress}
