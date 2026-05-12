@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+import { collection, addDoc, getDocs } from "firebase/firestore"
+import { db } from "../../firebase"
 import toast from "react-hot-toast"
 import { Upload } from "lucide-react"
 
@@ -47,28 +49,39 @@ export default function AdminUpload() {
     }
 
     setUploading(true)
-    setUploadProgress("正在上传文件... / Uploading file...")
 
     try {
-      // ✅ 使用本地后端 API 上传
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("title", form.title)
-      formData.append("type", form.type)
-      formData.append("form", form.form)
-      formData.append("subjectName", form.subjectName)
-      formData.append("chapter", form.chapter || "")
-      formData.append("year", form.year || "")
-      formData.append("state", form.state || "")
-      formData.append("freePreviewPages", form.freePreviewPages)
+      const fileName = `${Date.now()}_${file.name.replace(/\s/g, "_")}`
+      const uploadData = new FormData()
+      uploadData.append("file", file)
+      uploadData.append("fileName", fileName)
 
-      const response = await fetch("http://localhost:3001/api/materials", {
+      const uploadResponse = await fetch("http://localhost:3001/api/upload", {
         method: "POST",
-        body: formData,
+        body: uploadData,
       })
 
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || "上传失败 / Upload failed")
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text()
+        throw new Error(errorText || "Upload failed")
+      }
+
+      const uploadResult = await uploadResponse.json()
+      const savedFilePath = uploadResult.filePath || fileName
+
+      await addDoc(collection(db, "materials"), {
+        title: form.title,
+        type: form.type,
+        form: parseInt(form.form),
+        subjectName: form.subjectName,
+        chapter: parseInt(form.chapter) || 0,
+        year: parseInt(form.year) || 0,
+        state: form.state,
+        filePath: savedFilePath,
+        freePreviewPages: parseInt(form.freePreviewPages),
+        downloadCount: 0,
+        createdAt: new Date(),
+      })
 
       toast.success("上传成功！/ Upload successful!")
       setUploadProgress("")

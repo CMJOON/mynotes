@@ -1,5 +1,8 @@
 import { useParams, Link, useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
+import { db } from "../firebase"
+import { useAuth } from "../context/AuthContext"
 import { Lock, Download, Eye } from "lucide-react"
 import toast from "react-hot-toast"
 import PurchaseModal from "./PurchaseModal"
@@ -65,9 +68,10 @@ export default function SubjectPage() {
   }, [formId, subjectId])
 
   const handleView = async (material) => {
-    // 暂时跳过权限检查，直接允许查看
     try {
-      const url = getFileUrl(material)
+      const url = material.filePath
+        ? `http://localhost:3001/api/download/${material.filePath}`
+        : material.fileUrl
       if (!url) throw new Error("No file URL available")
       window.open(url, "_blank")
     } catch (err) {
@@ -76,12 +80,12 @@ export default function SubjectPage() {
   }
 
   const handleDownload = async (material) => {
-    // 暂时跳过权限检查，直接允许下载
     try {
-      const url = getFileUrl(material)
+      const url = material.filePath
+        ? `http://localhost:3001/api/download/${material.filePath}`
+        : material.fileUrl
       if (!url) throw new Error("No file URL available")
 
-      // 用 <a> 标签直接触发浏览器下载
       const link = document.createElement("a")
       link.href = url
       link.setAttribute("download", material.title + ".pdf")
