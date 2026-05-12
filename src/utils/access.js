@@ -1,7 +1,3 @@
-/**
- * 判断用户是否可以访问某份资料
- * Check if a user can access a given material
- */
 export function canAccess(user, userData, material) {
   // trial 和 pastyear 永远免费
   if (material.type === "trial" || material.type === "pastyear") return true
@@ -11,6 +7,9 @@ export function canAccess(user, userData, material) {
 
   // 未登录无法访问付费内容
   if (!user) return false
+
+  // ✅ Admin 可以访问所有内容
+  if (userData?.role === "admin") return true
 
   // 已付费用户检查套餐
   if (userData?.role === "paid") {

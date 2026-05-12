@@ -56,7 +56,7 @@ export default function AdminUpload() {
     e.preventDefault()
     if (!file) { toast.error("请选择PDF文件 / Please select a PDF file"); return }
     if (file.size > 50 * 1024 * 1024) {
-      toast.error("文件太大，最大 50MB / File too large, max 50MB")
+      toast.error("文件太大，最大 10MB / File too large, max 10MB")
       return
     }
     if (!form.subjectId) {
@@ -261,7 +261,7 @@ export default function AdminUpload() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">PDF 文件（最大 50MB）</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">PDF 文件（最大 10MB）</label>
           <input
             type="file"
             accept=".pdf"
