@@ -1,9 +1,11 @@
-import { useState, useRef } from "react"
-import { signInWithEmailAndPassword, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth"
+// src/pages/Login.jsx
+import { useState } from "react"
+import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth"
 import { doc, getDoc } from "firebase/firestore"
 import { auth, db, googleProvider } from "../firebase"
 import { Link, useNavigate } from "react-router-dom"
 import toast from "react-hot-toast"
+import { usePhoneAuth } from "../hooks/usePhoneAuth"
 
 export default function Login() {
   const navigate = useNavigate()
@@ -13,12 +15,8 @@ export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" })
   const [phone, setPhone] = useState("")
   const [otp, setOtp] = useState("")
-  const [otpSent, setOtpSent] = useState(false)
-  const [confirmResult, setConfirmResult] = useState(null)
-  const [otpLoading, setOtpLoading] = useState(false)
 
-  // ✅ 修复：用 ref 保存 RecaptchaVerifier 实例，避免重复创建
-  const recaptchaVerifierRef = useRef(null)
+  const { sendOtp, verifyOtp, reset, otpSent, loading: otpLoading } = usePhoneAuth()
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -36,7 +34,7 @@ export default function Login() {
       }
       toast.success("登录成功！/ Login successful!")
       navigate("/")
-    } catch (err) {
+    } catch {
       toast.error("邮箱或密码错误 / Invalid email or password")
     } finally {
       setLoading(false)
@@ -54,83 +52,33 @@ export default function Login() {
         toast.success("登录成功！/ Login successful!")
         navigate("/")
       }
-    } catch (err) {
+    } catch {
       toast.error("Google 登录失败 / Google login failed")
     } finally {
       setGoogleLoading(false)
     }
   }
 
-  const handleSendOtp = async () => {
-    if (phone.length < 9) {
-      toast.error("请输入有效电话号码 / Enter valid phone number")
-      return
-    }
-    setOtpLoading(true)
-    try {
-      // ✅ 修复：如果已有实例先清除，再创建新的
-      if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear()
-        recaptchaVerifierRef.current = null
-      }
-
-      recaptchaVerifierRef.current = new RecaptchaVerifier(
-        auth,
-        "recaptcha-container",
-        { size: "invisible" }
-      )
-
-      const fullPhone = "+60" + phone.replace(/^0/, "")
-      const result = await signInWithPhoneNumber(auth, fullPhone, recaptchaVerifierRef.current)
-      setConfirmResult(result)
-      setOtpSent(true)
-      toast.success("验证码已发送！/ OTP sent!")
-    } catch (err) {
-      console.error(err)
-      // ✅ 出错时也清除实例，允许用户重试
-      if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear()
-        recaptchaVerifierRef.current = null
-      }
-      toast.error("发送失败 / Failed to send OTP: " + err.message)
-    } finally {
-      setOtpLoading(false)
-    }
-  }
+  const handleSendOtp = () => sendOtp(phone)
 
   const handleVerifyOtp = async () => {
-    if (!otp || otp.length !== 6) {
-      toast.error("请输入6位验证码 / Enter 6-digit OTP")
-      return
-    }
-    setOtpLoading(true)
-    try {
-      const { user } = await confirmResult.confirm(otp)
-      const userDoc = await getDoc(doc(db, "users", user.uid))
-      if (!userDoc.exists()) {
-        navigate("/complete-profile")
-      } else {
-        toast.success("登录成功！/ Login successful!")
-        navigate("/")
-      }
-    } catch (err) {
-      toast.error("验证码错误 / Invalid OTP")
-    } finally {
-      setOtpLoading(false)
+    const user = await verifyOtp(otp)
+    if (!user) return
+    const userDoc = await getDoc(doc(db, "users", user.uid))
+    if (!userDoc.exists()) {
+      navigate("/complete-profile")
+    } else {
+      toast.success("登录成功！/ Login successful!")
+      navigate("/")
     }
   }
 
-  // ✅ 切换到其他 tab 时重置手机登录状态
   const handleTabChange = (newTab) => {
     setTab(newTab)
     if (newTab !== "phone") {
-      setOtpSent(false)
+      reset()
       setOtp("")
       setPhone("")
-      if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear()
-        recaptchaVerifierRef.current = null
-      }
     }
   }
 
@@ -271,7 +219,7 @@ export default function Login() {
                   {otpLoading ? "验证中..." : "验证登录 / Verify & Login"}
                 </button>
                 <button
-                  onClick={() => { setOtpSent(false); setOtp("") }}
+                  onClick={() => { reset(); setOtp("") }}
                   className="w-full text-sm text-gray-500 hover:text-gray-700"
                 >
                   更换号码 / Change number

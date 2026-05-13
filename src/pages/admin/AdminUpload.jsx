@@ -20,7 +20,7 @@ export default function AdminUpload() {
     chapter: "",
     year: "",
     state: "",
-    isFree: true,
+    isFree: false,
   })
   const [file, setFile] = useState(null)
 
