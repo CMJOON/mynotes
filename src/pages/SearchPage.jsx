@@ -50,21 +50,38 @@ export default function SearchPage() {
   }, [searchQuery])
 
   const handleView = (material) => {
-    if (!material.fileUrl) { toast.error("文件不存在 / File not found"); return }
+    if (!material.fileUrl) {
+      toast.error("文件不存在 / File not found")
+      return
+    }
     window.open(material.fileUrl, "_blank")
   }
 
   const handleDownload = (material) => {
-    if (!material.fileUrl) { toast.error("文件不存在 / File not found"); return }
-    const link = document.createElement("a")
-    link.href = material.fileUrl
-    link.setAttribute("download", material.title + ".pdf")
-    link.setAttribute("target", "_blank")
-    link.style.display = "none"
-    document.body.appendChild(link)
-    link.click()
-    setTimeout(() => document.body.removeChild(link), 100)
-    toast.success("下载已开始！/ Download started!")
+    if (!material.fileUrl) {
+      toast.error("文件不存在 / File not found")
+      return
+    }
+
+    try {
+      // 使用 Cloudinary fl_attachment 强制下载
+      const safeTitle = material.title.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-]/g, "")
+      const downloadUrl = material.fileUrl.replace(
+        "/upload/",
+        `/upload/fl_attachment:${safeTitle}/`
+      )
+
+      const link = document.createElement("a")
+      link.href = downloadUrl
+      link.setAttribute("download", material.title + ".pdf")
+      link.style.display = "none"
+      document.body.appendChild(link)
+      link.click()
+      setTimeout(() => document.body.removeChild(link), 100)
+      toast.success("下载已开始！/ Download started!")
+    } catch (err) {
+      toast.error("下载失败 / Download failed")
+    }
   }
 
   return (
