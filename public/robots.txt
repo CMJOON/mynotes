@@ -1,0 +1,13 @@
+User-agent: *
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /complete-profile
+Disallow: /verify-email
+Disallow: /search
+
+Allow: /
+Allow: /form/
+Allow: /login
+Allow: /register
+
+Sitemap: https://mynotes-eta.vercel.app/

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { collection, getDocs } from "firebase/firestore"
+import { collection, getDocs, query as firestoreQuery, limit } from "firebase/firestore"
 import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
 import { Lock, Download, Eye, Search } from "lucide-react"
@@ -16,21 +16,27 @@ const TYPE_LABELS = {
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams()
-  const query = searchParams.get("q") || ""
+  const searchQuery = searchParams.get("q") || ""
   const { user, userData } = useAuth()
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchResults() {
+      if (!searchQuery || searchQuery.trim().length < 2) {
+        setResults([])
+        setLoading(false)
+        return
+      }
       setLoading(true)
       try {
-        const snapshot = await getDocs(collection(db, "materials"))
+        const q = firestoreQuery(collection(db, "materials"), limit(200))
+        const snapshot = await getDocs(q)
         const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
         const filtered = all.filter(m =>
-          m.title?.toLowerCase().includes(query.toLowerCase()) ||
-          m.subjectName?.toLowerCase().includes(query.toLowerCase()) ||
-          m.type?.toLowerCase().includes(query.toLowerCase())
+          m.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          m.subjectName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          m.type?.toLowerCase().includes(searchQuery.toLowerCase())
         )
         setResults(filtered)
       } catch (error) {
@@ -40,9 +46,8 @@ export default function SearchPage() {
         setLoading(false)
       }
     }
-    if (query) fetchResults()
-    else setLoading(false)
-  }, [query])
+    fetchResults()
+  }, [searchQuery])
 
   const handleView = (material) => {
     if (!material.fileUrl) { toast.error("文件不存在 / File not found"); return }
@@ -70,7 +75,7 @@ export default function SearchPage() {
             <Search size={20} />
             <span className="text-sm">搜索结果 / Search Results</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">"{query}"</h1>
+          <h1 className="text-3xl font-bold text-gray-900">"{searchQuery}"</h1>
           <p className="text-gray-500 mt-1">找到 {results.length} 个结果 / Found {results.length} results</p>
         </div>
       </div>
@@ -78,6 +83,11 @@ export default function SearchPage() {
       <div className="max-w-5xl mx-auto px-4 py-6">
         {loading ? (
           <div className="text-center py-20 text-gray-400">搜索中... / Searching...</div>
+        ) : searchQuery.trim().length < 2 ? (
+          <div className="text-center py-20 text-gray-400">
+            <Search size={40} className="mx-auto mb-3 opacity-30" />
+            <p>请输入至少2个字符 / Enter at least 2 characters</p>
+          </div>
         ) : results.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <Search size={40} className="mx-auto mb-3 opacity-30" />

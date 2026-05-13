@@ -4,19 +4,38 @@ import { Crown, User } from "lucide-react"
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore"
 import { db } from "../../firebase"
 
-const SUBJECTS_BY_FORM = {
-  1: ["Mathematics", "Science", "Sejarah", "Bahasa Melayu", "English", "Moral", "Chinese"],
-  2: ["Mathematics", "Science", "Sejarah", "Bahasa Melayu", "English", "Moral", "Chinese"],
-  3: ["Mathematics", "Science", "Sejarah", "Bahasa Melayu", "English", "Moral", "Chinese"],
-  4: ["Mathematics", "Physics", "Chemistry", "Biology", "Sejarah", "Bahasa Melayu", "English", "Moral", "Add Math", "Chinese"],
-  5: ["Mathematics", "Physics", "Chemistry", "Biology", "Sejarah", "Bahasa Melayu", "English", "Moral", "Add Math", "Chinese"],
-}
-
 export default function AdminUsers() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [subjectsByForm, setSubjectsByForm] = useState({})
+  const [loadingSubjects, setLoadingSubjects] = useState(true)
+
+  // 从 Firestore 动态读取科目
+  async function fetchSubjects() {
+    try {
+      const snapshot = await getDocs(collection(db, "subjects"))
+      const groups = {}
+      snapshot.docs.forEach(d => {
+        const data = d.data()
+        const form = data.form
+        const name = data.name
+        if (!form || !name) return
+        if (!groups[form]) groups[form] = []
+        groups[form].push(name)
+      })
+      // 每个年级的科目按字母排序
+      Object.keys(groups).forEach(form => {
+        groups[form].sort()
+      })
+      setSubjectsByForm(groups)
+    } catch (err) {
+      toast.error("加载科目失败 / Failed to load subjects")
+    } finally {
+      setLoadingSubjects(false)
+    }
+  }
 
   async function fetchUsers() {
     try {
@@ -31,7 +50,10 @@ export default function AdminUsers() {
     }
   }
 
-  useEffect(() => { fetchUsers() }, [])
+  useEffect(() => {
+    fetchSubjects()
+    fetchUsers()
+  }, [])
 
   async function handleSave() {
     if (!selectedUser) return
@@ -61,10 +83,7 @@ export default function AdminUsers() {
       const newSubjects = isChecked
         ? current.filter(s => s !== key)
         : [...current, key]
-
-      // ✅ 有套餐或有任何单科目解锁，role 都应该是 paid
       const newRole = (prev.paidPackage || newSubjects.length > 0) ? "paid" : "free"
-
       return { ...prev, paidSubjects: newSubjects, role: newRole }
     })
   }
@@ -151,7 +170,6 @@ export default function AdminUsers() {
                       checked={selectedUser.paidPackage === pkg.value}
                       onChange={() => setSelectedUser(prev => {
                         const newPackage = pkg.value
-                        // ✅ 取消套餐时，如果还有 paidSubjects，role 保持 paid
                         const newRole = (newPackage || prev.paidSubjects?.length > 0) ? "paid" : "free"
                         return { ...prev, paidPackage: newPackage, role: newRole }
                       })}
@@ -163,16 +181,18 @@ export default function AdminUsers() {
               </div>
             </div>
 
-            {/* 单科目解锁 */}
+            {/* 单科目解锁 — 动态从 Firestore 读取 */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 单科目解锁 / Single Subject
               </label>
-              {[1, 2, 3, 4, 5].map(form => (
+              {loadingSubjects ? (
+                <p className="text-xs text-gray-400">加载科目中...</p>
+              ) : Object.keys(subjectsByForm).sort((a, b) => a - b).map(form => (
                 <div key={form} className="mb-3">
                   <p className="text-xs text-gray-500 mb-1 font-medium">Form {form}</p>
                   <div className="space-y-1">
-                    {SUBJECTS_BY_FORM[form].map(subject => {
+                    {subjectsByForm[form].map(subject => {
                       const key = `${subject}_form${form}`
                       const checked = selectedUser.paidSubjects?.includes(key) || false
                       return (

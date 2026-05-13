@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react"
 import { useAuth } from "../context/AuthContext"
 import { useNavigate } from "react-router-dom"
 import { User, ShoppingBag, Crown, BookOpen, Package, Star, RefreshCw } from "lucide-react"
@@ -45,8 +45,19 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("profile")
   const [showPurchase, setShowPurchase] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const lastRefreshRef = useRef(0)
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
+    const now = Date.now()
+    const COOLDOWN = 30000 // 30秒冷却
+    const remaining = Math.ceil((COOLDOWN - (now - lastRefreshRef.current)) / 1000)
+
+    if (now - lastRefreshRef.current < COOLDOWN) {
+      toast.error(`请等待 ${remaining} 秒后再刷新 / Please wait ${remaining}s`)
+      return
+    }
+
+    lastRefreshRef.current = now
     setRefreshing(true)
     try {
       await refreshUserData()
@@ -56,7 +67,7 @@ export default function Dashboard() {
     } finally {
       setRefreshing(false)
     }
-  }
+  }, [refreshUserData])
 
   if (loading) {
     return (
@@ -103,7 +114,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 刷新权限按钮 */}
           <button
             onClick={handleRefresh}
             disabled={refreshing}

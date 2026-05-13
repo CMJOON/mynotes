@@ -16,7 +16,6 @@ export default function Register() {
   const [otp, setOtp] = useState("")
   const [phone, setPhone] = useState("")
 
-  // ✅ 修复：用 ref 保存 RecaptchaVerifier 实例，避免重复创建
   const recaptchaVerifierRef = useRef(null)
 
   const [form, setForm] = useState({
@@ -31,7 +30,6 @@ export default function Register() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  // 邮箱注册
   const handleEmailRegister = async (e) => {
     e.preventDefault()
     if (form.password.length < 6) {
@@ -60,17 +58,12 @@ export default function Register() {
       toast.success("注册成功！请检查邮箱验证邮件 / Check your email for verification!")
       navigate("/verify-email")
     } catch (err) {
-      if (err.code === "auth/email-already-in-use") {
-        toast.error("此邮箱已注册 / Email already in use")
-      } else {
-        toast.error("注册失败，请重试 / Registration failed")
-      }
+      toast.error("注册失败，请检查信息后重试 / Registration failed, please try again")
     } finally {
       setLoading(false)
     }
   }
 
-  // Google 注册
   const handleGoogleRegister = async () => {
     setGoogleLoading(true)
     try {
@@ -89,7 +82,6 @@ export default function Register() {
     }
   }
 
-  // 发送 OTP
   const handleSendOtp = async () => {
     if (phone.length < 9) {
       toast.error("请输入有效电话号码 / Enter valid phone number")
@@ -97,7 +89,6 @@ export default function Register() {
     }
     setOtpLoading(true)
     try {
-      // ✅ 修复：如果已有实例先清除，再创建新的
       if (recaptchaVerifierRef.current) {
         recaptchaVerifierRef.current.clear()
         recaptchaVerifierRef.current = null
@@ -115,7 +106,6 @@ export default function Register() {
       setOtpSent(true)
       toast.success("验证码已发送！/ OTP sent!")
     } catch (err) {
-      // ✅ 出错时也清除实例，允许用户重试
       if (recaptchaVerifierRef.current) {
         recaptchaVerifierRef.current.clear()
         recaptchaVerifierRef.current = null
@@ -126,7 +116,6 @@ export default function Register() {
     }
   }
 
-  // 验证 OTP
   const handleVerifyOtp = async () => {
     if (!otp || otp.length !== 6) {
       toast.error("请输入6位验证码 / Enter 6-digit OTP")
@@ -149,7 +138,6 @@ export default function Register() {
     }
   }
 
-  // ✅ 切换 tab 时重置手机登录状态
   const handleTabChange = (newTab) => {
     setTab(newTab)
     if (newTab !== "phone") {
@@ -169,7 +157,6 @@ export default function Register() {
         <h1 className="text-2xl font-bold text-center text-blue-600 mb-2">MyNotes</h1>
         <p className="text-center text-gray-500 mb-6">创建账号 / Create Account</p>
 
-        {/* Google 注册 */}
         <button
           onClick={handleGoogleRegister}
           disabled={googleLoading}
@@ -192,7 +179,6 @@ export default function Register() {
           <div className="flex-1 h-px bg-gray-200"></div>
         </div>
 
-        {/* Tab 切换 */}
         <div className="flex border border-gray-200 rounded-lg p-1 mb-4">
           <button
             onClick={() => handleTabChange("email")}
@@ -212,7 +198,6 @@ export default function Register() {
           </button>
         </div>
 
-        {/* 邮箱注册 */}
         {tab === "email" && (
           <form onSubmit={handleEmailRegister} className="space-y-4">
             <div>
@@ -291,7 +276,6 @@ export default function Register() {
           </form>
         )}
 
-        {/* 手机号注册 */}
         {tab === "phone" && (
           <div className="space-y-4">
             <div>
