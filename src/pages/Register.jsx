@@ -1,23 +1,19 @@
-import { useState, useRef } from "react"
-import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth"
+// src/pages/Register.jsx
+import { useState } from "react"
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification, signInWithPopup } from "firebase/auth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { auth, db, googleProvider } from "../firebase"
 import { Link, useNavigate } from "react-router-dom"
 import toast from "react-hot-toast"
+import { usePhoneAuth } from "../hooks/usePhoneAuth"
 
 export default function Register() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [tab, setTab] = useState("email")
-  const [otpSent, setOtpSent] = useState(false)
-  const [confirmResult, setConfirmResult] = useState(null)
-  const [otpLoading, setOtpLoading] = useState(false)
   const [otp, setOtp] = useState("")
   const [phone, setPhone] = useState("")
-
-  const recaptchaVerifierRef = useRef(null)
-
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -25,6 +21,8 @@ export default function Register() {
     phone: "",
     formLevel: "5"
   })
+
+  const { sendOtp, verifyOtp, reset, otpSent, loading: otpLoading } = usePhoneAuth()
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -47,7 +45,7 @@ export default function Register() {
       await setDoc(doc(db, "users", user.uid), {
         name: form.name,
         email: form.email,
-        phone: form.phone,
+        phone: form.phone.replace(/^0/, "").replace(/[^0-9]/g, ""),
         formLevel: parseInt(form.formLevel),
         role: "free",
         paidSubjects: [],
@@ -58,7 +56,11 @@ export default function Register() {
       toast.success("注册成功！请检查邮箱验证邮件 / Check your email for verification!")
       navigate("/verify-email")
     } catch (err) {
-      toast.error("注册失败，请检查信息后重试 / Registration failed, please try again")
+      if (err.code === "auth/email-already-in-use") {
+        toast.error("此邮箱已注册 / Email already in use")
+      } else {
+        toast.error("注册失败，请重试 / Registration failed")
+      }
     } finally {
       setLoading(false)
     }
@@ -75,79 +77,33 @@ export default function Register() {
         toast.success("登录成功！/ Login successful!")
         navigate("/")
       }
-    } catch (err) {
+    } catch {
       toast.error("Google 注册失败 / Google registration failed")
     } finally {
       setGoogleLoading(false)
     }
   }
 
-  const handleSendOtp = async () => {
-    if (phone.length < 9) {
-      toast.error("请输入有效电话号码 / Enter valid phone number")
-      return
-    }
-    setOtpLoading(true)
-    try {
-      if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear()
-        recaptchaVerifierRef.current = null
-      }
-
-      recaptchaVerifierRef.current = new RecaptchaVerifier(
-        auth,
-        "recaptcha-container",
-        { size: "invisible" }
-      )
-
-      const fullPhone = "+60" + phone.replace(/^0/, "")
-      const result = await signInWithPhoneNumber(auth, fullPhone, recaptchaVerifierRef.current)
-      setConfirmResult(result)
-      setOtpSent(true)
-      toast.success("验证码已发送！/ OTP sent!")
-    } catch (err) {
-      if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear()
-        recaptchaVerifierRef.current = null
-      }
-      toast.error("发送失败 / Failed to send OTP: " + err.message)
-    } finally {
-      setOtpLoading(false)
-    }
-  }
+  const handleSendOtp = () => sendOtp(phone)
 
   const handleVerifyOtp = async () => {
-    if (!otp || otp.length !== 6) {
-      toast.error("请输入6位验证码 / Enter 6-digit OTP")
-      return
-    }
-    setOtpLoading(true)
-    try {
-      const { user } = await confirmResult.confirm(otp)
-      const userDoc = await getDoc(doc(db, "users", user.uid))
-      if (!userDoc.exists()) {
-        navigate("/complete-profile")
-      } else {
-        toast.success("登录成功！/ Login successful!")
-        navigate("/")
-      }
-    } catch (err) {
-      toast.error("验证码错误 / Invalid OTP")
-    } finally {
-      setOtpLoading(false)
+    const user = await verifyOtp(otp)
+    if (!user) return
+    const userDoc = await getDoc(doc(db, "users", user.uid))
+    if (!userDoc.exists()) {
+      navigate("/complete-profile")
+    } else {
+      toast.success("登录成功！/ Login successful!")
+      navigate("/")
     }
   }
 
   const handleTabChange = (newTab) => {
     setTab(newTab)
     if (newTab !== "phone") {
-      setOtpSent(false)
+      reset()
       setOtp("")
       setPhone("")
-      if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear()
-        recaptchaVerifierRef.current = null
-      }
     }
   }
 
@@ -157,6 +113,7 @@ export default function Register() {
         <h1 className="text-2xl font-bold text-center text-blue-600 mb-2">MyNotes</h1>
         <p className="text-center text-gray-500 mb-6">创建账号 / Create Account</p>
 
+        {/* Google 注册 */}
         <button
           onClick={handleGoogleRegister}
           disabled={googleLoading}
@@ -179,6 +136,7 @@ export default function Register() {
           <div className="flex-1 h-px bg-gray-200"></div>
         </div>
 
+        {/* Tab 切换 */}
         <div className="flex border border-gray-200 rounded-lg p-1 mb-4">
           <button
             onClick={() => handleTabChange("email")}
@@ -198,6 +156,7 @@ export default function Register() {
           </button>
         </div>
 
+        {/* 邮箱注册 */}
         {tab === "email" && (
           <form onSubmit={handleEmailRegister} className="space-y-4">
             <div>
@@ -276,6 +235,7 @@ export default function Register() {
           </form>
         )}
 
+        {/* 手机号注册 */}
         {tab === "phone" && (
           <div className="space-y-4">
             <div>
@@ -322,7 +282,7 @@ export default function Register() {
                   {otpLoading ? "验证中..." : "验证注册 / Verify & Register"}
                 </button>
                 <button
-                  onClick={() => { setOtpSent(false); setOtp("") }}
+                  onClick={() => { reset(); setOtp("") }}
                   className="w-full text-sm text-gray-500 hover:text-gray-700"
                 >
                   更换号码 / Change number

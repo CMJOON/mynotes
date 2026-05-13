@@ -36,7 +36,7 @@ export default function CompleteProfile() {
       await setDoc(doc(db, "users", user.uid), {
         name: form.name,
         email: user.email || "",
-        phone: form.phone,
+        phone: form.phone.replace(/^0/, "").replace(/[^0-9]/g, ""), // ← 加这个格式化
         formLevel: parseInt(form.formLevel),
         role: "free",
         paidSubjects: [],

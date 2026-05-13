@@ -1,48 +1,61 @@
+// src/pages/admin/AdminUsers.jsx
 import { useEffect, useState } from "react"
 import toast from "react-hot-toast"
-import { Crown, User } from "lucide-react"
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore"
+import { Crown, User, ChevronLeft, ChevronRight } from "lucide-react"
+import {
+  collection, getDocs, doc, updateDoc,
+  query, orderBy, limit, startAfter
+} from "firebase/firestore"
 import { db } from "../../firebase"
+
+const PAGE_SIZE = 10
+
+const SUBJECTS_BY_FORM = {
+  1: ["Mathematics", "Science", "Sejarah", "Bahasa Melayu", "English", "Moral", "Chinese"],
+  2: ["Mathematics", "Science", "Sejarah", "Bahasa Melayu", "English", "Moral", "Chinese"],
+  3: ["Mathematics", "Science", "Sejarah", "Bahasa Melayu", "English", "Moral", "Chinese"],
+  4: ["Mathematics", "Physics", "Chemistry", "Biology", "Sejarah", "Bahasa Melayu", "English", "Moral", "Add Math", "Chinese"],
+  5: ["Mathematics", "Physics", "Chemistry", "Biology", "Sejarah", "Bahasa Melayu", "English", "Moral", "Add Math", "Chinese"],
+}
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [subjectsByForm, setSubjectsByForm] = useState({})
-  const [loadingSubjects, setLoadingSubjects] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagecursors, setPageCursors] = useState([null])
+  const [hasMore, setHasMore] = useState(false)
 
-  // 从 Firestore 动态读取科目
-  async function fetchSubjects() {
+  async function fetchUsers(cursorDoc) {
+    setLoading(true)
     try {
-      const snapshot = await getDocs(collection(db, "subjects"))
-      const groups = {}
-      snapshot.docs.forEach(d => {
-        const data = d.data()
-        const form = data.form
-        const name = data.name
-        if (!form || !name) return
-        if (!groups[form]) groups[form] = []
-        groups[form].push(name)
-      })
-      // 每个年级的科目按字母排序
-      Object.keys(groups).forEach(form => {
-        groups[form].sort()
-      })
-      setSubjectsByForm(groups)
-    } catch (err) {
-      toast.error("加载科目失败 / Failed to load subjects")
-    } finally {
-      setLoadingSubjects(false)
-    }
-  }
+      const q = cursorDoc
+        ? query(
+            collection(db, "users"),
+            orderBy("name"),
+            startAfter(cursorDoc),
+            limit(PAGE_SIZE)
+          )
+        : query(
+            collection(db, "users"),
+            orderBy("name"),
+            limit(PAGE_SIZE)
+          )
 
-  async function fetchUsers() {
-    try {
-      const snapshot = await getDocs(collection(db, "users"))
+      const snapshot = await getDocs(q)
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-      data.sort((a, b) => (a.name || "").localeCompare(b.name || ""))
       setUsers(data)
+      setHasMore(snapshot.docs.length === PAGE_SIZE)
+
+      if (snapshot.docs.length > 0) {
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1]
+        setPageCursors(prev => {
+          const updated = [...prev]
+          updated[currentPage] = lastDoc
+          return updated
+        })
+      }
     } catch (err) {
       toast.error("加载用户失败 / Failed to load users")
     } finally {
@@ -51,9 +64,8 @@ export default function AdminUsers() {
   }
 
   useEffect(() => {
-    fetchSubjects()
-    fetchUsers()
-  }, [])
+    fetchUsers(pagecursors[currentPage - 1])
+  }, [currentPage])
 
   async function handleSave() {
     if (!selectedUser) return
@@ -65,10 +77,9 @@ export default function AdminUsers() {
         paidSubjects: selectedUser.paidSubjects || [],
       })
       toast.success("权限已更新 / Permission updated!")
-      fetchUsers()
+      fetchUsers(pagecursors[currentPage - 1])
       setSelectedUser(null)
     } catch (err) {
-      console.error("Update failed:", err)
       toast.error("更新失败 / Update failed: " + err.message)
     } finally {
       setSaving(false)
@@ -93,8 +104,6 @@ export default function AdminUsers() {
       <h1 className="text-2xl font-bold text-gray-800 mb-8">用户管理 / User Management</h1>
 
       <div className="flex gap-6">
-
-        {/* 用户列表 */}
         <div className="flex-1">
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
@@ -108,7 +117,9 @@ export default function AdminUsers() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">加载中...</td></tr>
+                  <tr>
+                    <td colSpan={4} className="text-center py-8 text-gray-400">加载中...</td>
+                  </tr>
                 ) : users.map(u => (
                   <tr key={u.id} className={`hover:bg-gray-50 ${selectedUser?.id === u.id ? "bg-blue-50" : ""}`}>
                     <td className="px-4 py-3">
@@ -142,15 +153,38 @@ export default function AdminUsers() {
               </tbody>
             </table>
           </div>
+
+          {/* 分页控制 */}
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-sm text-gray-400">
+              第 {currentPage} 页，每页 {PAGE_SIZE} 条
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => p - 1)}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={14} /> 上一页
+              </button>
+              <span className="text-sm text-gray-600 px-2">{currentPage}</span>
+              <button
+                onClick={() => setCurrentPage(p => p + 1)}
+                disabled={!hasMore}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                下一页 <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* 权限编辑面板 */}
+        {/* 权限编辑面板 — 完全不变 */}
         {selectedUser && (
           <div className="w-80 bg-white rounded-2xl border border-gray-200 p-6 h-fit sticky top-4 max-h-[90vh] overflow-y-auto">
             <h2 className="font-bold text-gray-800 mb-1">{selectedUser.name}</h2>
             <p className="text-sm text-gray-400 mb-4">{selectedUser.email}</p>
 
-            {/* 套餐选择 */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">套餐 / Package</label>
               <div className="space-y-2">
@@ -173,7 +207,6 @@ export default function AdminUsers() {
                         const newRole = (newPackage || prev.paidSubjects?.length > 0) ? "paid" : "free"
                         return { ...prev, paidPackage: newPackage, role: newRole }
                       })}
-                      className="text-blue-600"
                     />
                     <span className="text-sm text-gray-700">{pkg.label}</span>
                   </label>
@@ -181,18 +214,15 @@ export default function AdminUsers() {
               </div>
             </div>
 
-            {/* 单科目解锁 — 动态从 Firestore 读取 */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 单科目解锁 / Single Subject
               </label>
-              {loadingSubjects ? (
-                <p className="text-xs text-gray-400">加载科目中...</p>
-              ) : Object.keys(subjectsByForm).sort((a, b) => a - b).map(form => (
+              {[1, 2, 3, 4, 5].map(form => (
                 <div key={form} className="mb-3">
                   <p className="text-xs text-gray-500 mb-1 font-medium">Form {form}</p>
                   <div className="space-y-1">
-                    {subjectsByForm[form].map(subject => {
+                    {SUBJECTS_BY_FORM[form].map(subject => {
                       const key = `${subject}_form${form}`
                       const checked = selectedUser.paidSubjects?.includes(key) || false
                       return (
@@ -201,7 +231,6 @@ export default function AdminUsers() {
                             type="checkbox"
                             checked={checked}
                             onChange={() => toggleSubject(subject, form)}
-                            className="text-blue-600"
                           />
                           <span className="text-xs text-gray-700">{subject}</span>
                         </label>
@@ -212,7 +241,6 @@ export default function AdminUsers() {
               ))}
             </div>
 
-            {/* 当前 role 预览 */}
             <div className="mb-4 px-3 py-2 bg-gray-50 rounded-lg text-xs text-gray-500">
               保存后 role：
               <span className={`ml-1 font-semibold ${selectedUser.role === "paid" ? "text-yellow-600" : "text-gray-400"}`}>

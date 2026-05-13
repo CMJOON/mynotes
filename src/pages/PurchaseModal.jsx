@@ -42,7 +42,7 @@ export default function PurchaseModal({
   useEffect(() => {
     if (open) {
       setName(userData?.name || "")
-      setPhone(userData?.phone ? `+60${userData.phone}` : "")
+      setPhone(userData?.phone ? `+60${userData.phone}` : "+60")
       setPkg(defaultPackage)
       setForm(defaultForm || userData?.formLevel?.toString() || "")
       setSubject(defaultSubject)
