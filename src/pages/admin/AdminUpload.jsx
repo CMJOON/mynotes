@@ -55,7 +55,7 @@ export default function AdminUpload() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!file) { toast.error("请选择PDF文件 / Please select a PDF file"); return }
-    if (file.size > 50 * 1024 * 1024) {
+    if (file.size > 10 * 1024 * 1024) {
       toast.error("文件太大，最大 10MB / File too large, max 10MB")
       return
     }
@@ -271,7 +271,7 @@ export default function AdminUpload() {
           {file && (
             <p className="text-xs text-green-600 mt-1">
               已选择: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-              {file.size > 50 * 1024 * 1024 && (
+              {file.size > 10 * 1024 * 1024 && (
                 <span className="text-red-500 ml-2">⚠️ 文件太大！</span>
               )}
             </p>

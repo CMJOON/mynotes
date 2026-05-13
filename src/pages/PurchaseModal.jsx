@@ -4,7 +4,7 @@ import { PRICING } from "../utils/constants"
 import { collection, getDocs, query, where } from "firebase/firestore"
 import { db } from "../firebase"
 
-const WHATSAPP_NUMBER = "601174470610"
+const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER
 
 function buildWhatsAppUrl(message) {
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`
