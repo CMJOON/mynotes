@@ -18,6 +18,10 @@ const TYPE_LABELS = {
   pastyear: { zh: "Past Year", en: "Past Year" },
 }
 
+// 模块级缓存，组件卸载后依然保留
+const materialsCache = { data: null, timestamp: 0 }
+const CACHE_TTL = 5 * 60 * 1000 // 5分钟
+
 export default function SearchPage() {
   const [searchParams] = useSearchParams()
   const query = searchParams.get("q") || ""
@@ -31,8 +35,18 @@ export default function SearchPage() {
       setLoading(true)
       setCurrentPage(1)
       try {
-        const snapshot = await getDocs(collection(db, "materials"))
-        const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+        // 检查缓存是否有效
+        const now = Date.now()
+        let all
+        if (materialsCache.data && now - materialsCache.timestamp < CACHE_TTL) {
+          all = materialsCache.data
+        } else {
+          const snapshot = await getDocs(collection(db, "materials"))
+          all = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+          materialsCache.data = all
+          materialsCache.timestamp = now
+        }
+
         const filtered = all.filter(m =>
           m.title?.toLowerCase().includes(query.toLowerCase()) ||
           m.subjectName?.toLowerCase().includes(query.toLowerCase()) ||
@@ -182,7 +196,6 @@ export default function SearchPage() {
                     <ChevronLeft size={14} /> 上一页
                   </button>
 
-                  {/* 页码按钮 */}
                   {Array.from({ length: totalPages }, (_, i) => i + 1)
                     .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
                     .reduce((acc, p, idx, arr) => {
