@@ -56,7 +56,7 @@ export default function AdminUsers() {
           return updated
         })
       }
-    } catch (err) {
+    } catch {
       toast.error("加载用户失败 / Failed to load users")
     } finally {
       setLoading(false)
@@ -65,6 +65,8 @@ export default function AdminUsers() {
 
   useEffect(() => {
     fetchUsers(pagecursors[currentPage - 1])
+    // Pagination cursors are updated by fetchUsers; currentPage is the fetch trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage])
 
   async function handleSave() {

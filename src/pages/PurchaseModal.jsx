@@ -72,7 +72,7 @@ export default function PurchaseModal({
         setLoadingSubs(false)
       }
     })()
-  }, [form])
+  }, [form, defaultSubject])
 
   function validate() {
     const e = {}

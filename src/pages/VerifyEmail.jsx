@@ -31,7 +31,7 @@ export default function VerifyEmail() {
       await sendEmailVerification(auth.currentUser)
       toast.success("验证邮件已重新发送！/ Verification email resent!")
       setCountdown(60)
-    } catch (err) {
+    } catch {
       toast.error("发送失败，请稍后再试 / Failed to resend")
     } finally {
       setResending(false)

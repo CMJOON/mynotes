@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react"
-import { collection, addDoc, getDocs } from "firebase/firestore"
+import { collection, addDoc, doc, getDocs, serverTimestamp, setDoc } from "firebase/firestore"
 import { db } from "../../firebase"
 import toast from "react-hot-toast"
 import { Upload } from "lucide-react"
+import { buildMaterialFileData } from "../../utils/materialFiles"
 
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
@@ -84,7 +85,7 @@ export default function AdminUpload() {
 
       setUploadProgress("正在保存资料信息...")
 
-      await addDoc(collection(db, "materials"), {
+      const materialData = {
         title: form.title,
         type: form.type,
         form: parseInt(form.form),
@@ -93,10 +94,21 @@ export default function AdminUpload() {
         chapter: parseInt(form.chapter) || 0,
         year: parseInt(form.year) || 0,
         state: form.state || "",
-        fileUrl: fileUrl,
         isFree: form.isFree,
         downloadCount: 0,
-        createdAt: new Date(),
+        accessKey: `${form.subjectName}_form${form.form}`,
+        formPackage: `form${form.form}`,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }
+
+      const materialRef = await addDoc(collection(db, "materials"), materialData)
+      await setDoc(doc(db, "materialFiles", materialRef.id), {
+        ...buildMaterialFileData(materialData, fileUrl),
+        cloudinaryPublicId: cloudData.public_id || "",
+        resourceType: cloudData.resource_type || "raw",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       })
 
       toast.success("上传成功！/ Upload successful!")

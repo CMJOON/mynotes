@@ -7,6 +7,33 @@ import { Link, useNavigate } from "react-router-dom"
 import toast from "react-hot-toast"
 import { usePhoneAuth } from "../hooks/usePhoneAuth"
 
+function getAuthErrorMessage(error) {
+  if (error.code?.startsWith("auth/requests-from-referer-")) {
+    return "当前网址被 Google API Key 阻挡，请在 Google Cloud 允许 localhost/127.0.0.1 / This local URL is blocked by the API key"
+  }
+
+  switch (error.code) {
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "邮箱或密码错误 / Invalid email or password"
+    case "auth/too-many-requests":
+      return "尝试次数过多，请稍后再试 / Too many attempts, please try later"
+    case "auth/popup-closed-by-user":
+      return "登录窗口已关闭 / Login popup was closed"
+    case "auth/popup-blocked":
+      return "浏览器阻止了登录窗口 / Popup was blocked by the browser"
+    case "auth/operation-not-allowed":
+      return "此登录方式尚未启用 / This sign-in method is not enabled"
+    case "auth/unauthorized-domain":
+      return "当前域名未加入 Firebase 授权域名 / This domain is not authorized in Firebase"
+    case "permission-denied":
+      return "无法读取账号资料，请检查 Firestore 权限 / Cannot read profile, check Firestore rules"
+    default:
+      return "登录失败，请稍后再试 / Login failed, please try again"
+  }
+}
+
 export default function Login() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
@@ -28,14 +55,15 @@ export default function Login() {
     try {
       const { user } = await signInWithEmailAndPassword(auth, form.email, form.password)
       if (!user.emailVerified) {
-        toast.error("请先验证邮箱！/ Please verify your email first!")
-        setLoading(false)
+        toast("请先验证邮箱 / Please verify your email")
+        navigate("/verify-email")
         return
       }
       toast.success("登录成功！/ Login successful!")
       navigate("/")
-    } catch {
-      toast.error("邮箱或密码错误 / Invalid email or password")
+    } catch (error) {
+      console.error("Email login failed:", error)
+      toast.error(getAuthErrorMessage(error))
     } finally {
       setLoading(false)
     }
@@ -52,8 +80,9 @@ export default function Login() {
         toast.success("登录成功！/ Login successful!")
         navigate("/")
       }
-    } catch {
-      toast.error("Google 登录失败 / Google login failed")
+    } catch (error) {
+      console.error("Google login failed:", error)
+      toast.error(getAuthErrorMessage(error))
     } finally {
       setGoogleLoading(false)
     }
@@ -64,12 +93,17 @@ export default function Login() {
   const handleVerifyOtp = async () => {
     const user = await verifyOtp(otp)
     if (!user) return
-    const userDoc = await getDoc(doc(db, "users", user.uid))
-    if (!userDoc.exists()) {
-      navigate("/complete-profile")
-    } else {
-      toast.success("登录成功！/ Login successful!")
-      navigate("/")
+    try {
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+      if (!userDoc.exists()) {
+        navigate("/complete-profile")
+      } else {
+        toast.success("登录成功！/ Login successful!")
+        navigate("/")
+      }
+    } catch (error) {
+      console.error("Phone login profile load failed:", error)
+      toast.error(getAuthErrorMessage(error))
     }
   }
 

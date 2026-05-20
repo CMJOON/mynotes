@@ -1,3 +1,13 @@
+export function getMaterialAccessKey(material) {
+  if (material?.accessKey) return material.accessKey
+  return `${material?.subjectName}_form${material?.form}`
+}
+
+export function getMaterialFormPackage(material) {
+  if (material?.formPackage) return material.formPackage
+  return `form${material?.form}`
+}
+
 export function canAccess(user, userData, material) {
   // trial 和 pastyear 永远免费
   if (material.type === "trial" || material.type === "pastyear") return true
@@ -14,8 +24,8 @@ export function canAccess(user, userData, material) {
   // 已付费用户检查套餐
   if (userData?.role === "paid") {
     if (userData?.paidPackage === "premium") return true
-    if (userData?.paidPackage === `form${material.form}`) return true
-    if (userData?.paidSubjects?.includes(material.subjectName + "_form" + material.form)) return true
+    if (userData?.paidPackage === getMaterialFormPackage(material)) return true
+    if (userData?.paidSubjects?.includes(getMaterialAccessKey(material))) return true
   }
 
   return false

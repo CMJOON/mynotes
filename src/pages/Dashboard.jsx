@@ -4,8 +4,6 @@ import { useNavigate } from "react-router-dom"
 import { User, ShoppingBag, Crown, BookOpen, Package, Star, RefreshCw } from "lucide-react"
 import PurchaseModal from "./PurchaseModal"
 import { PRICING } from "../utils/constants"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "../firebase"
 import toast from "react-hot-toast"
 
 const TABS = [

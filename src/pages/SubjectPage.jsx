@@ -7,6 +7,7 @@ import { Lock, Download, Eye } from "lucide-react"
 import toast from "react-hot-toast"
 import PurchaseModal from "./PurchaseModal"
 import { canAccess } from "../utils/access"
+import { buildDownloadUrl, getMaterialFileUrl } from "../utils/materialFiles"
 
 const TYPE_LABELS = {
   note: { zh: "笔记", en: "Notes" },
@@ -30,7 +31,8 @@ export default function SubjectPage() {
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("all")
-  const [showPurchase, setShowPurchase] = useState(false)
+  const [purchaseMaterial, setPurchaseMaterial] = useState(null)
+  const [busyAction, setBusyAction] = useState("")
 
   useEffect(() => {
     async function fetchData() {
@@ -60,46 +62,42 @@ export default function SubjectPage() {
     fetchData()
   }, [formId, subjectId])
 
-  const handleView = (material) => {
+  const handleView = async (material) => {
     if (!canAccess(user, userData, material)) {
-      setShowPurchase(true)
+      setPurchaseMaterial(material)
       return
     }
-    if (material.fileUrl) {
-      window.open(material.fileUrl, "_blank")
-    } else {
+    setBusyAction(`view-${material.id}`)
+    try {
+      const fileUrl = await getMaterialFileUrl(material, user, userData)
+      window.open(fileUrl, "_blank")
+    } catch {
       toast.error("文件不存在 / File not found")
+    } finally {
+      setBusyAction("")
     }
   }
 
-  const handleDownload = (material) => {
+  const handleDownload = async (material) => {
     if (!canAccess(user, userData, material)) {
-      setShowPurchase(true)
+      setPurchaseMaterial(material)
       return
     }
-    if (!material.fileUrl) {
-      toast.error("文件不存在 / File not found")
-      return
-    }
-
+    setBusyAction(`download-${material.id}`)
     try {
-      // 使用 Cloudinary fl_attachment 强制下载
-      const safeTitle = material.title.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-]/g, "")
-      const downloadUrl = material.fileUrl.replace(
-        "/upload/",
-        `/upload/fl_attachment:${safeTitle}/`
-      )
-
+      const fileUrl = await getMaterialFileUrl(material, user, userData)
       const link = document.createElement("a")
-      link.href = downloadUrl
+      link.href = buildDownloadUrl(fileUrl, material.title)
       link.setAttribute("download", material.title + ".pdf")
       link.style.display = "none"
       document.body.appendChild(link)
       link.click()
       setTimeout(() => document.body.removeChild(link), 100)
       toast.success("下载已开始！/ Download started!")
-    } catch (err) {
+    } catch {
       toast.error("下载失败 / Download failed")
+    } finally {
+      setBusyAction("")
     }
   }
 
@@ -158,16 +156,16 @@ export default function SubjectPage() {
               return (
                 <div
                   key={material.id}
-                  className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between hover:shadow-sm transition"
+                  className="bg-white rounded-xl border border-gray-200 px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:shadow-sm transition"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
                     {accessible
                       ? <span className="text-green-500"><Eye size={18} /></span>
                       : <span className="text-gray-400"><Lock size={18} /></span>
                     }
-                    <div>
-                      <p className="font-medium text-gray-800">{material.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-800 break-words">{material.title}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className="text-xs text-gray-400">
                           {TYPE_LABELS[material.type]?.zh} / {TYPE_LABELS[material.type]?.en}
                         </span>
@@ -185,26 +183,28 @@ export default function SubjectPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     {accessible ? (
                       <>
                         <button
                           onClick={() => handleView(material)}
-                          className="flex items-center gap-1.5 bg-gray-100 text-gray-700 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition"
+                          disabled={busyAction === `view-${material.id}`}
+                          className="flex flex-1 sm:flex-none items-center justify-center gap-1.5 bg-gray-100 text-gray-700 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition disabled:opacity-50"
                         >
-                          <Eye size={14} /> 查阅
+                          <Eye size={14} /> {busyAction === `view-${material.id}` ? "打开中" : "查阅"}
                         </button>
                         <button
                           onClick={() => handleDownload(material)}
-                          className="flex items-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 transition"
+                          disabled={busyAction === `download-${material.id}`}
+                          className="flex flex-1 sm:flex-none items-center justify-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
                         >
-                          <Download size={14} /> 下载
+                          <Download size={14} /> {busyAction === `download-${material.id}` ? "下载中" : "下载"}
                         </button>
                       </>
                     ) : (
                       <button
-                        onClick={() => setShowPurchase(true)}
-                        className="flex items-center gap-1.5 bg-gray-100 text-gray-600 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition"
+                        onClick={() => setPurchaseMaterial(material)}
+                        className="flex w-full sm:w-auto items-center justify-center gap-1.5 bg-gray-100 text-gray-600 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200 transition"
                       >
                         <Lock size={14} /> 解锁 / Unlock
                       </button>
@@ -218,11 +218,11 @@ export default function SubjectPage() {
       </div>
 
       <PurchaseModal
-        open={showPurchase}
-        onClose={() => setShowPurchase(false)}
+        open={!!purchaseMaterial}
+        onClose={() => setPurchaseMaterial(null)}
         userData={userData}
         defaultForm={formId}
-        defaultSubject={subjectName}
+        defaultSubject={purchaseMaterial?.subjectName || subjectName}
         defaultPackage="subject"
       />
     </div>
