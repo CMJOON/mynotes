@@ -10,6 +10,7 @@ import {
 import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
 import {
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -25,8 +26,11 @@ import PurchaseModal from "./PurchaseModal"
 import { canAccess } from "../utils/access"
 import { buildDownloadUrl, getMaterialFileUrl } from "../utils/materialFiles"
 import {
+  completeMaterialForUser,
+  loadCompletedMaterialIds,
   loadSavedMaterialIds,
   recordRecentMaterial,
+  removeCompletedMaterial,
   removeSavedMaterial,
   saveMaterialForUser,
 } from "../utils/userMaterials"
@@ -93,7 +97,9 @@ export default function SearchPage() {
   const [purchaseMaterial, setPurchaseMaterial] = useState(null)
   const [busyAction, setBusyAction] = useState("")
   const [savedMaterialIds, setSavedMaterialIds] = useState(new Set())
+  const [completedMaterialIds, setCompletedMaterialIds] = useState(new Set())
   const [savingMaterialId, setSavingMaterialId] = useState("")
+  const [completingMaterialId, setCompletingMaterialId] = useState("")
   const [filters, setFilters] = useState({
     form: searchParams.get("form") || "",
     subjectId: searchParams.get("subjectId") || "",
@@ -123,14 +129,20 @@ export default function SearchPage() {
   }, [])
 
   useEffect(() => {
-    async function fetchSavedMaterials() {
+    async function fetchUserMaterialState() {
       try {
-        setSavedMaterialIds(await loadSavedMaterialIds(user))
+        const [savedIds, completedIds] = await Promise.all([
+          loadSavedMaterialIds(user),
+          loadCompletedMaterialIds(user),
+        ])
+        setSavedMaterialIds(savedIds)
+        setCompletedMaterialIds(completedIds)
       } catch {
         setSavedMaterialIds(new Set())
+        setCompletedMaterialIds(new Set())
       }
     }
-    fetchSavedMaterials()
+    fetchUserMaterialState()
   }, [user])
 
   useEffect(() => {
@@ -285,6 +297,40 @@ export default function SearchPage() {
     }
   }
 
+  async function handleToggleCompleted(material) {
+    if (!user) {
+      toast.error("请先登录后记录进度 / Please login to track progress")
+      return
+    }
+
+    if (!canAccess(user, userData, material)) {
+      setPurchaseMaterial(material)
+      return
+    }
+
+    const isCompleted = completedMaterialIds.has(material.id)
+    setCompletingMaterialId(material.id)
+    try {
+      if (isCompleted) {
+        await removeCompletedMaterial(user, material.id)
+        setCompletedMaterialIds(prev => {
+          const next = new Set(prev)
+          next.delete(material.id)
+          return next
+        })
+        toast.success("已取消完成 / Marked as not completed")
+      } else {
+        await completeMaterialForUser(user, material)
+        setCompletedMaterialIds(prev => new Set(prev).add(material.id))
+        toast.success("已标记完成 / Marked as completed")
+      }
+    } catch {
+      toast.error("更新进度失败 / Failed to update progress")
+    } finally {
+      setCompletingMaterialId("")
+    }
+  }
+
   const hasFilters = filters.form || filters.subjectId || filters.type
   const heading = queryText ? `"${queryText}"` : "筛选资料 / Filter Materials"
 
@@ -372,6 +418,7 @@ export default function SearchPage() {
                 const accessible = canAccess(user, userData, material)
                 const isFree = material.type === "trial" || material.type === "pastyear" || material.isFree
                 const isSaved = savedMaterialIds.has(material.id)
+                const isCompleted = completedMaterialIds.has(material.id)
 
                 return (
                   <div
@@ -421,6 +468,19 @@ export default function SearchPage() {
                       >
                         <Star size={14} fill={isSaved ? "currentColor" : "none"} />
                         {isSaved ? "已收藏" : "收藏"}
+                      </button>
+                      <button
+                        onClick={() => handleToggleCompleted(material)}
+                        disabled={completingMaterialId === material.id}
+                        className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition disabled:opacity-50 ${
+                          isCompleted
+                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                        title={isCompleted ? "取消完成" : "标记完成"}
+                      >
+                        <CheckCircle2 size={14} />
+                        {isCompleted ? "已完成" : "完成"}
                       </button>
                       {accessible ? (
                         <>

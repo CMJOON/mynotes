@@ -1,16 +1,19 @@
 import { useState, useRef, useCallback, useEffect } from "react"
 import { useAuth } from "../context/AuthContext"
 import { Link, useNavigate } from "react-router-dom"
-import { User, ShoppingBag, Crown, BookOpen, Package, Star, RefreshCw, Clock, Trash2 } from "lucide-react"
+import { collection, getDocs } from "firebase/firestore"
+import { User, ShoppingBag, Crown, BookOpen, Package, Star, RefreshCw, Clock, Trash2, CheckCircle2, BarChart3 } from "lucide-react"
 import PurchaseModal from "./PurchaseModal"
 import { PRICING } from "../utils/constants"
 import toast from "react-hot-toast"
-import { loadUserMaterialList, removeSavedMaterial } from "../utils/userMaterials"
+import { db } from "../firebase"
+import { loadUserMaterialList, removeCompletedMaterial, removeSavedMaterial } from "../utils/userMaterials"
 
 const TABS = [
   { key: "profile", zh: "我的资料", en: "Profile", icon: User },
   { key: "saved", zh: "我的收藏", en: "Saved", icon: Star },
   { key: "recent", zh: "最近查看", en: "Recent", icon: Clock },
+  { key: "progress", zh: "学习进度", en: "Progress", icon: BarChart3 },
   { key: "purchases", zh: "我的购买", en: "Purchases", icon: ShoppingBag },
   { key: "upgrade", zh: "升级会员", en: "Upgrade", icon: Crown },
 ]
@@ -64,7 +67,7 @@ function formatTimestamp(timestamp) {
   })
 }
 
-function MaterialList({ items, emptyIcon: EmptyIcon, emptyTitle, emptyDesc, onRemoveSaved }) {
+function MaterialList({ items, emptyIcon: EmptyIcon, emptyTitle, emptyDesc, onRemoveSaved, onRemoveCompleted }) {
   if (items.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400">
@@ -88,15 +91,24 @@ function MaterialList({ items, emptyIcon: EmptyIcon, emptyTitle, emptyDesc, onRe
             <p className="text-xs text-gray-400 mt-1">
               {material.savedAt ? `收藏于 / Saved ${formatTimestamp(material.savedAt)}` : ""}
               {material.viewedAt ? `最近查看 / Viewed ${formatTimestamp(material.viewedAt)}` : ""}
+              {material.completedAt ? `完成于 / Completed ${formatTimestamp(material.completedAt)}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
             {onRemoveSaved && (
               <button
                 onClick={() => onRemoveSaved(material.id)}
                 className="flex items-center justify-center gap-1.5 bg-gray-100 text-gray-500 text-sm px-3 py-1.5 rounded-lg hover:text-red-500 hover:bg-red-50 transition"
               >
                 <Trash2 size={14} /> 移除
+              </button>
+            )}
+            {onRemoveCompleted && (
+              <button
+                onClick={() => onRemoveCompleted(material.id)}
+                className="flex items-center justify-center gap-1.5 bg-gray-100 text-gray-500 text-sm px-3 py-1.5 rounded-lg hover:text-red-500 hover:bg-red-50 transition"
+              >
+                <Trash2 size={14} /> 撤销
               </button>
             )}
             {material.form && material.subjectId && (
@@ -114,6 +126,55 @@ function MaterialList({ items, emptyIcon: EmptyIcon, emptyTitle, emptyDesc, onRe
   )
 }
 
+function getProgressKey(material) {
+  return `${material.form || 0}__${material.subjectId || material.subjectName || "unknown"}`
+}
+
+function buildSubjectProgress(allMaterials, completedMaterials) {
+  const rows = new Map()
+
+  for (const material of allMaterials) {
+    const key = getProgressKey(material)
+    const current = rows.get(key) || {
+      key,
+      form: material.form || 0,
+      subjectName: material.subjectName || "Unknown",
+      total: 0,
+      completed: 0,
+    }
+    current.total += 1
+    rows.set(key, current)
+  }
+
+  const completedIds = new Set(completedMaterials.map(material => material.materialId || material.id))
+  for (const material of allMaterials) {
+    if (!completedIds.has(material.id)) continue
+    const key = getProgressKey(material)
+    const current = rows.get(key)
+    if (current) current.completed += 1
+  }
+
+  for (const material of completedMaterials) {
+    const key = getProgressKey(material)
+    if (rows.has(key)) continue
+    rows.set(key, {
+      key,
+      form: material.form || 0,
+      subjectName: material.subjectName || "Unknown",
+      total: 1,
+      completed: 1,
+    })
+  }
+
+  return Array.from(rows.values())
+    .filter(row => row.total > 0)
+    .map(row => ({
+      ...row,
+      percent: Math.round((row.completed / row.total) * 100),
+    }))
+    .sort((a, b) => a.form - b.form || a.subjectName.localeCompare(b.subjectName))
+}
+
 export default function Dashboard() {
   const { user, userData, loading, refreshUserData } = useAuth()
   const navigate = useNavigate()
@@ -123,6 +184,8 @@ export default function Dashboard() {
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [savedMaterials, setSavedMaterials] = useState([])
   const [recentMaterials, setRecentMaterials] = useState([])
+  const [completedMaterials, setCompletedMaterials] = useState([])
+  const [allMaterials, setAllMaterials] = useState([])
   const lastRefreshRef = useRef(0)
 
   const handleRefresh = useCallback(async () => {
@@ -152,12 +215,16 @@ export default function Dashboard() {
 
     setLibraryLoading(true)
     try {
-      const [saved, recent] = await Promise.all([
+      const [saved, recent, completed, materialsSnapshot] = await Promise.all([
         loadUserMaterialList(user, "savedMaterials"),
         loadUserMaterialList(user, "recentMaterials"),
+        loadUserMaterialList(user, "completedMaterials", 100),
+        getDocs(collection(db, "materials")),
       ])
       setSavedMaterials(saved)
       setRecentMaterials(recent)
+      setCompletedMaterials(completed)
+      setAllMaterials(materialsSnapshot.docs.map(item => ({ id: item.id, ...item.data() })))
     } catch {
       toast.error("学习记录加载失败 / Failed to load learning records")
     } finally {
@@ -179,6 +246,16 @@ export default function Dashboard() {
     }
   }
 
+  const handleRemoveCompleted = async (materialId) => {
+    try {
+      await removeCompletedMaterial(user, materialId)
+      setCompletedMaterials(prev => prev.filter(material => material.id !== materialId))
+      toast.success("已撤销完成 / Completion removed")
+    } catch {
+      toast.error("撤销失败 / Failed to update progress")
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-400">
@@ -196,6 +273,12 @@ export default function Dashboard() {
   const subjectGroups = groupSubjectsByForm(userData?.paidSubjects)
   const hasSubjects = Object.keys(subjectGroups).length > 0
   const hasPurchases = !!packageLabel || hasSubjects
+  const subjectProgress = buildSubjectProgress(allMaterials, completedMaterials)
+  const completedCount = completedMaterials.length
+  const totalMaterialCount = allMaterials.length
+  const overallPercent = totalMaterialCount
+    ? Math.round((completedCount / totalMaterialCount) * 100)
+    : 0
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f0f4f8" }}>
@@ -318,6 +401,81 @@ export default function Dashboard() {
                 emptyDesc="Viewed materials will appear here"
               />
             )}
+          </div>
+        )}
+
+        {/* 学习进度 */}
+        {activeTab === "progress" && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-1">学习进度 / Learning Progress</h2>
+              <p className="text-sm text-gray-400 mb-5">在资料卡点击“完成”，这里会自动更新。</p>
+
+              {libraryLoading ? (
+                <div className="text-center py-12 text-gray-400">加载中... / Loading...</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <p className="text-xs text-gray-400">总完成度 / Overall</p>
+                      <p className="text-3xl font-bold text-blue-600 mt-1">{overallPercent}%</p>
+                    </div>
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <p className="text-xs text-gray-400">已完成 / Completed</p>
+                      <p className="text-3xl font-bold text-green-600 mt-1">{completedCount}</p>
+                    </div>
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <p className="text-xs text-gray-400">资料总数 / Materials</p>
+                      <p className="text-3xl font-bold text-gray-800 mt-1">{totalMaterialCount}</p>
+                    </div>
+                  </div>
+
+                  {subjectProgress.length === 0 ? (
+                    <div className="text-center py-12 text-gray-400">
+                      <CheckCircle2 size={40} className="mx-auto mb-3 opacity-30" />
+                      <p>还没有进度记录</p>
+                      <p className="text-sm mt-1">Mark materials as completed to track progress</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {subjectProgress.map(row => (
+                        <div key={row.key} className="border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <div>
+                              <p className="font-semibold text-gray-800">Form {row.form} · {row.subjectName}</p>
+                              <p className="text-xs text-gray-400">{row.completed} / {row.total} completed</p>
+                            </div>
+                            <span className="text-sm font-bold text-blue-600">{row.percent}%</span>
+                          </div>
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-blue-600 rounded-full transition-all"
+                              style={{ width: `${row.percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-1">已完成资料 / Completed Materials</h2>
+              <p className="text-sm text-gray-400 mb-5">你可以撤销完成状态，进度会同步更新。</p>
+              {libraryLoading ? (
+                <div className="text-center py-12 text-gray-400">加载中... / Loading...</div>
+              ) : (
+                <MaterialList
+                  items={completedMaterials}
+                  emptyIcon={CheckCircle2}
+                  emptyTitle="还没有完成资料"
+                  emptyDesc="Completed materials will appear here"
+                  onRemoveCompleted={handleRemoveCompleted}
+                />
+              )}
+            </div>
           </div>
         )}
 

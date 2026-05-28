@@ -79,6 +79,13 @@ service cloud.firestore {
           && isSafeMaterialData(request.resource.data);
         allow delete: if isOwner(userId);
       }
+
+      match /completedMaterials/{materialId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId)
+          && isSafeMaterialData(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
     }
 
     // ── materials ──────────────────────────────────────────────────────────

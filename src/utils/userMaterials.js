@@ -37,10 +37,22 @@ export async function loadSavedMaterialIds(user) {
   return new Set(snapshot.docs.map(item => item.id))
 }
 
+export async function loadCompletedMaterialIds(user) {
+  if (!user) return new Set()
+
+  const snapshot = await getDocs(collection(db, "users", user.uid, "completedMaterials"))
+  return new Set(snapshot.docs.map(item => item.id))
+}
+
 export async function loadUserMaterialList(user, listName, count = LIST_LIMIT) {
   if (!user) return []
 
-  const timestampField = listName === "recentMaterials" ? "viewedAt" : "savedAt"
+  const timestampField =
+    listName === "recentMaterials"
+      ? "viewedAt"
+      : listName === "completedMaterials"
+      ? "completedAt"
+      : "savedAt"
   const listQuery = query(
     collection(db, "users", user.uid, listName),
     orderBy(timestampField, "desc"),
@@ -67,6 +79,21 @@ export async function removeSavedMaterial(user, materialId) {
   if (!user) throw new Error("LOGIN_REQUIRED")
 
   await deleteDoc(doc(db, "users", user.uid, "savedMaterials", materialId))
+}
+
+export async function completeMaterialForUser(user, material) {
+  if (!user) throw new Error("LOGIN_REQUIRED")
+
+  await setDoc(doc(db, "users", user.uid, "completedMaterials", material.id), {
+    ...materialToUserSnapshot(material),
+    completedAt: serverTimestamp(),
+  })
+}
+
+export async function removeCompletedMaterial(user, materialId) {
+  if (!user) throw new Error("LOGIN_REQUIRED")
+
+  await deleteDoc(doc(db, "users", user.uid, "completedMaterials", materialId))
 }
 
 export async function recordRecentMaterial(user, material, action = "view") {
