@@ -1,13 +1,19 @@
-import { useParams, Link } from "react-router-dom"
+﻿import { useParams, Link } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
-import { Lock, Download, Eye } from "lucide-react"
+import { Lock, Download, Eye, Star } from "lucide-react"
 import toast from "react-hot-toast"
 import PurchaseModal from "./PurchaseModal"
 import { canAccess } from "../utils/access"
 import { buildDownloadUrl, getMaterialFileUrl } from "../utils/materialFiles"
+import {
+  loadSavedMaterialIds,
+  recordRecentMaterial,
+  removeSavedMaterial,
+  saveMaterialForUser,
+} from "../utils/userMaterials"
 
 const TYPE_LABELS = {
   note: { zh: "笔记", en: "Notes" },
@@ -33,6 +39,8 @@ export default function SubjectPage() {
   const [activeTab, setActiveTab] = useState("all")
   const [purchaseMaterial, setPurchaseMaterial] = useState(null)
   const [busyAction, setBusyAction] = useState("")
+  const [savedMaterialIds, setSavedMaterialIds] = useState(new Set())
+  const [savingMaterialId, setSavingMaterialId] = useState("")
 
   useEffect(() => {
     async function fetchData() {
@@ -62,6 +70,17 @@ export default function SubjectPage() {
     fetchData()
   }, [formId, subjectId])
 
+  useEffect(() => {
+    async function fetchSavedMaterials() {
+      try {
+        setSavedMaterialIds(await loadSavedMaterialIds(user))
+      } catch {
+        setSavedMaterialIds(new Set())
+      }
+    }
+    fetchSavedMaterials()
+  }, [user])
+
   const handleView = async (material) => {
     if (!canAccess(user, userData, material)) {
       setPurchaseMaterial(material)
@@ -70,6 +89,7 @@ export default function SubjectPage() {
     setBusyAction(`view-${material.id}`)
     try {
       const fileUrl = await getMaterialFileUrl(material, user, userData)
+      recordRecentMaterial(user, material, "view").catch(() => {})
       window.open(fileUrl, "_blank")
     } catch {
       toast.error("文件不存在 / File not found")
@@ -86,6 +106,7 @@ export default function SubjectPage() {
     setBusyAction(`download-${material.id}`)
     try {
       const fileUrl = await getMaterialFileUrl(material, user, userData)
+      recordRecentMaterial(user, material, "download").catch(() => {})
       const link = document.createElement("a")
       link.href = buildDownloadUrl(fileUrl, material.title)
       link.setAttribute("download", material.title + ".pdf")
@@ -98,6 +119,35 @@ export default function SubjectPage() {
       toast.error("下载失败 / Download failed")
     } finally {
       setBusyAction("")
+    }
+  }
+
+  const handleToggleSaved = async (material) => {
+    if (!user) {
+      toast.error("请先登录后收藏 / Please login to save materials")
+      return
+    }
+
+    const isSaved = savedMaterialIds.has(material.id)
+    setSavingMaterialId(material.id)
+    try {
+      if (isSaved) {
+        await removeSavedMaterial(user, material.id)
+        setSavedMaterialIds(prev => {
+          const next = new Set(prev)
+          next.delete(material.id)
+          return next
+        })
+        toast.success("已取消收藏 / Removed from saved")
+      } else {
+        await saveMaterialForUser(user, material)
+        setSavedMaterialIds(prev => new Set(prev).add(material.id))
+        toast.success("已收藏 / Saved")
+      }
+    } catch {
+      toast.error("收藏失败 / Failed to update saved materials")
+    } finally {
+      setSavingMaterialId("")
     }
   }
 
@@ -152,6 +202,7 @@ export default function SubjectPage() {
             {filtered.map(material => {
               const accessible = canAccess(user, userData, material)
               const isFree = material.type === "trial" || material.type === "pastyear" || material.isFree
+              const isSaved = savedMaterialIds.has(material.id)
 
               return (
                 <div
@@ -183,7 +234,20 @@ export default function SubjectPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => handleToggleSaved(material)}
+                      disabled={savingMaterialId === material.id}
+                      className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition disabled:opacity-50 ${
+                        isSaved
+                          ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                      title={isSaved ? "取消收藏" : "收藏资料"}
+                    >
+                      <Star size={14} fill={isSaved ? "currentColor" : "none"} />
+                      {isSaved ? "已收藏" : "收藏"}
+                    </button>
                     {accessible ? (
                       <>
                         <button

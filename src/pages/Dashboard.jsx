@@ -1,13 +1,16 @@
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { useAuth } from "../context/AuthContext"
-import { useNavigate } from "react-router-dom"
-import { User, ShoppingBag, Crown, BookOpen, Package, Star, RefreshCw } from "lucide-react"
+import { Link, useNavigate } from "react-router-dom"
+import { User, ShoppingBag, Crown, BookOpen, Package, Star, RefreshCw, Clock, Trash2 } from "lucide-react"
 import PurchaseModal from "./PurchaseModal"
 import { PRICING } from "../utils/constants"
 import toast from "react-hot-toast"
+import { loadUserMaterialList, removeSavedMaterial } from "../utils/userMaterials"
 
 const TABS = [
   { key: "profile", zh: "我的资料", en: "Profile", icon: User },
+  { key: "saved", zh: "我的收藏", en: "Saved", icon: Star },
+  { key: "recent", zh: "最近查看", en: "Recent", icon: Clock },
   { key: "purchases", zh: "我的购买", en: "Purchases", icon: ShoppingBag },
   { key: "upgrade", zh: "升级会员", en: "Upgrade", icon: Crown },
 ]
@@ -37,12 +40,89 @@ function groupSubjectsByForm(paidSubjects = []) {
   return groups
 }
 
+function getMaterialMeta(material) {
+  const parts = [
+    material.type,
+    material.form ? `Form ${material.form}` : "",
+    material.subjectName,
+  ]
+
+  if (material.chapter > 0) parts.push(`第${material.chapter}章`)
+  if (material.year > 0) parts.push(material.year)
+  if (material.state) parts.push(material.state)
+
+  return parts.filter(Boolean).join(" · ")
+}
+
+function formatTimestamp(timestamp) {
+  const date = timestamp?.toDate?.()
+  if (!date) return ""
+
+  return date.toLocaleDateString("en-MY", {
+    month: "short",
+    day: "numeric",
+  })
+}
+
+function MaterialList({ items, emptyIcon: EmptyIcon, emptyTitle, emptyDesc, onRemoveSaved }) {
+  if (items.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-400">
+        <EmptyIcon size={40} className="mx-auto mb-3 opacity-30" />
+        <p>{emptyTitle}</p>
+        <p className="text-sm mt-1">{emptyDesc}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map(material => (
+        <div
+          key={material.id}
+          className="border border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="min-w-0">
+            <p className="font-semibold text-gray-800 break-words">{material.title}</p>
+            <p className="text-xs text-gray-400 mt-1">{getMaterialMeta(material)}</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {material.savedAt ? `收藏于 / Saved ${formatTimestamp(material.savedAt)}` : ""}
+              {material.viewedAt ? `最近查看 / Viewed ${formatTimestamp(material.viewedAt)}` : ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {onRemoveSaved && (
+              <button
+                onClick={() => onRemoveSaved(material.id)}
+                className="flex items-center justify-center gap-1.5 bg-gray-100 text-gray-500 text-sm px-3 py-1.5 rounded-lg hover:text-red-500 hover:bg-red-50 transition"
+              >
+                <Trash2 size={14} /> 移除
+              </button>
+            )}
+            {material.form && material.subjectId && (
+              <Link
+                to={`/form/${material.form}/${material.subjectId}`}
+                className="flex items-center justify-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 transition"
+              >
+                前往科目
+              </Link>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { user, userData, loading, refreshUserData } = useAuth()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState("profile")
   const [showPurchase, setShowPurchase] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [libraryLoading, setLibraryLoading] = useState(false)
+  const [savedMaterials, setSavedMaterials] = useState([])
+  const [recentMaterials, setRecentMaterials] = useState([])
   const lastRefreshRef = useRef(0)
 
   const handleRefresh = useCallback(async () => {
@@ -66,6 +146,38 @@ export default function Dashboard() {
       setRefreshing(false)
     }
   }, [refreshUserData])
+
+  const loadLibraryLists = useCallback(async () => {
+    if (!user) return
+
+    setLibraryLoading(true)
+    try {
+      const [saved, recent] = await Promise.all([
+        loadUserMaterialList(user, "savedMaterials"),
+        loadUserMaterialList(user, "recentMaterials"),
+      ])
+      setSavedMaterials(saved)
+      setRecentMaterials(recent)
+    } catch {
+      toast.error("学习记录加载失败 / Failed to load learning records")
+    } finally {
+      setLibraryLoading(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    loadLibraryLists()
+  }, [loadLibraryLists])
+
+  const handleRemoveSaved = async (materialId) => {
+    try {
+      await removeSavedMaterial(user, materialId)
+      setSavedMaterials(prev => prev.filter(material => material.id !== materialId))
+      toast.success("已移除收藏 / Removed from saved")
+    } catch {
+      toast.error("移除失败 / Failed to remove saved material")
+    }
+  }
 
   if (loading) {
     return (
@@ -125,7 +237,7 @@ export default function Dashboard() {
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 flex gap-1">
+        <div className="max-w-4xl mx-auto px-4 flex gap-1 overflow-x-auto">
           {TABS.map(tab => (
             <button
               key={tab.key}
@@ -169,6 +281,43 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* 我的收藏 */}
+        {activeTab === "saved" && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-1">我的收藏 / Saved Materials</h2>
+            <p className="text-sm text-gray-400 mb-5">把常用资料留在这里，之后可以快速回到对应科目。</p>
+            {libraryLoading ? (
+              <div className="text-center py-12 text-gray-400">加载中... / Loading...</div>
+            ) : (
+              <MaterialList
+                items={savedMaterials}
+                emptyIcon={Star}
+                emptyTitle="还没有收藏资料"
+                emptyDesc="Save useful materials for quick access"
+                onRemoveSaved={handleRemoveSaved}
+              />
+            )}
+          </div>
+        )}
+
+        {/* 最近查看 */}
+        {activeTab === "recent" && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-1">最近查看 / Recent Materials</h2>
+            <p className="text-sm text-gray-400 mb-5">打开或下载资料后，会自动记录在这里。</p>
+            {libraryLoading ? (
+              <div className="text-center py-12 text-gray-400">加载中... / Loading...</div>
+            ) : (
+              <MaterialList
+                items={recentMaterials}
+                emptyIcon={Clock}
+                emptyTitle="还没有查看记录"
+                emptyDesc="Viewed materials will appear here"
+              />
+            )}
           </div>
         )}
 

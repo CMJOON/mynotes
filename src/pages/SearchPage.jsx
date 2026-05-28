@@ -1,4 +1,4 @@
-// src/pages/SearchPage.jsx
+﻿// src/pages/SearchPage.jsx
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import {
@@ -17,12 +17,19 @@ import {
   Filter,
   Lock,
   Search,
+  Star,
   X,
 } from "lucide-react"
 import toast from "react-hot-toast"
 import PurchaseModal from "./PurchaseModal"
 import { canAccess } from "../utils/access"
 import { buildDownloadUrl, getMaterialFileUrl } from "../utils/materialFiles"
+import {
+  loadSavedMaterialIds,
+  recordRecentMaterial,
+  removeSavedMaterial,
+  saveMaterialForUser,
+} from "../utils/userMaterials"
 
 const PAGE_SIZE = 10
 const CACHE_TTL = 5 * 60 * 1000
@@ -85,6 +92,8 @@ export default function SearchPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [purchaseMaterial, setPurchaseMaterial] = useState(null)
   const [busyAction, setBusyAction] = useState("")
+  const [savedMaterialIds, setSavedMaterialIds] = useState(new Set())
+  const [savingMaterialId, setSavingMaterialId] = useState("")
   const [filters, setFilters] = useState({
     form: searchParams.get("form") || "",
     subjectId: searchParams.get("subjectId") || "",
@@ -112,6 +121,17 @@ export default function SearchPage() {
     }
     fetchSubjects()
   }, [])
+
+  useEffect(() => {
+    async function fetchSavedMaterials() {
+      try {
+        setSavedMaterialIds(await loadSavedMaterialIds(user))
+      } catch {
+        setSavedMaterialIds(new Set())
+      }
+    }
+    fetchSavedMaterials()
+  }, [user])
 
   useEffect(() => {
     async function fetchResults() {
@@ -211,6 +231,7 @@ export default function SearchPage() {
 
     try {
       const fileUrl = await getMaterialFileUrl(material, user, userData)
+      recordRecentMaterial(user, material, mode).catch(() => {})
 
       if (mode === "view") {
         if (popup) popup.location.href = fileUrl
@@ -232,6 +253,35 @@ export default function SearchPage() {
       toast.error(mode === "view" ? "文件不存在 / File not found" : "下载失败 / Download failed")
     } finally {
       setBusyAction("")
+    }
+  }
+
+  async function handleToggleSaved(material) {
+    if (!user) {
+      toast.error("请先登录后收藏 / Please login to save materials")
+      return
+    }
+
+    const isSaved = savedMaterialIds.has(material.id)
+    setSavingMaterialId(material.id)
+    try {
+      if (isSaved) {
+        await removeSavedMaterial(user, material.id)
+        setSavedMaterialIds(prev => {
+          const next = new Set(prev)
+          next.delete(material.id)
+          return next
+        })
+        toast.success("已取消收藏 / Removed from saved")
+      } else {
+        await saveMaterialForUser(user, material)
+        setSavedMaterialIds(prev => new Set(prev).add(material.id))
+        toast.success("已收藏 / Saved")
+      }
+    } catch {
+      toast.error("收藏失败 / Failed to update saved materials")
+    } finally {
+      setSavingMaterialId("")
     }
   }
 
@@ -321,6 +371,7 @@ export default function SearchPage() {
               {paginatedResults.map(material => {
                 const accessible = canAccess(user, userData, material)
                 const isFree = material.type === "trial" || material.type === "pastyear" || material.isFree
+                const isSaved = savedMaterialIds.has(material.id)
 
                 return (
                   <div
@@ -357,7 +408,20 @@ export default function SearchPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                      <button
+                        onClick={() => handleToggleSaved(material)}
+                        disabled={savingMaterialId === material.id}
+                        className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition disabled:opacity-50 ${
+                          isSaved
+                            ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                        title={isSaved ? "取消收藏" : "收藏资料"}
+                      >
+                        <Star size={14} fill={isSaved ? "currentColor" : "none"} />
+                        {isSaved ? "已收藏" : "收藏"}
+                      </button>
                       {accessible ? (
                         <>
                           <button
