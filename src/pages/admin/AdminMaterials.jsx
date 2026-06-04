@@ -18,6 +18,7 @@ import { db } from "../../firebase"
 import toast from "react-hot-toast"
 import { ChevronLeft, ChevronRight, Pencil, ShieldCheck, Trash2 } from "lucide-react"
 import { buildMaterialFileData } from "../../utils/materialFiles"
+import { MALAYSIA_STATES, PAPER_TYPES } from "../../utils/constants"
 
 const PAGE_SIZE = 10
 
@@ -28,6 +29,10 @@ const TYPE_COLORS = {
   pastyear: "bg-orange-100 text-orange-600",
 }
 
+function getPaperTypeLabel(value) {
+  return PAPER_TYPES.find(paper => paper.value === value)?.label || value
+}
+
 function toEditableMaterial(material) {
   return {
     ...material,
@@ -35,6 +40,8 @@ function toEditableMaterial(material) {
     chapter: material.chapter ? String(material.chapter) : "",
     year: material.year ? String(material.year) : "",
     state: material.state || "",
+    paperType: material.paperType || "",
+    hasAnswerScheme: !!material.hasAnswerScheme,
     isFree: !!material.isFree,
   }
 }
@@ -48,9 +55,11 @@ function toMaterialUpdate(form) {
     form: formNumber,
     subjectId: form.subjectId || "",
     subjectName: form.subjectName || "",
-    chapter: parseInt(form.chapter) || 0,
-    year: parseInt(form.year) || 0,
-    state: form.state || "",
+    chapter: form.type === "note" || form.type === "exercise" ? parseInt(form.chapter) || 0 : 0,
+    year: form.type === "trial" || form.type === "pastyear" ? parseInt(form.year) || 0 : 0,
+    state: form.type === "trial" ? form.state || "" : "",
+    paperType: form.type === "trial" || form.type === "pastyear" ? form.paperType || "" : "",
+    hasAnswerScheme: form.type === "trial" || form.type === "pastyear" ? !!form.hasAnswerScheme : false,
     isFree: !!form.isFree,
     accessKey: `${form.subjectName}_form${formNumber}`,
     formPackage: `form${formNumber}`,
@@ -299,6 +308,24 @@ export default function AdminMaterials() {
                               {material.fileUrl && (
                                 <p className="text-xs text-orange-500 mt-1">旧链接待迁移 / Legacy fileUrl</p>
                               )}
+                              {(material.year > 0 || material.state || material.paperType || material.type === "trial" || material.type === "pastyear") && (
+                                <div className="mt-1 flex flex-wrap gap-1.5">
+                                  {material.year > 0 && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{material.year}</span>
+                                  )}
+                                  {material.state && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{material.state}</span>
+                                  )}
+                                  {material.paperType && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">{getPaperTypeLabel(material.paperType)}</span>
+                                  )}
+                                  {(material.type === "trial" || material.type === "pastyear") && (
+                                    <span className={`text-[11px] px-2 py-0.5 rounded-full ${material.hasAnswerScheme ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-500"}`}>
+                                      {material.hasAnswerScheme ? "有答案" : "无答案"}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${TYPE_COLORS[material.type]}`}>
@@ -472,13 +499,56 @@ export default function AdminMaterials() {
                   </div>
                   <div>
                     <label className="block text-sm text-gray-500 mb-1">州属</label>
-                    <input
-                      name="state"
-                      value={selectedMaterial.state}
+                    {selectedMaterial.type === "trial" ? (
+                      <select
+                        name="state"
+                        value={selectedMaterial.state}
+                        onChange={handleEditChange}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">未指定</option>
+                        {MALAYSIA_STATES.map(state => (
+                          <option key={state} value={state}>{state}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value="N/A"
+                        disabled
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-400"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {(selectedMaterial.type === "trial" || selectedMaterial.type === "pastyear") && (
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">试卷类型 / Paper Type</label>
+                    <select
+                      name="paperType"
+                      value={selectedMaterial.paperType || ""}
                       onChange={handleEditChange}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    >
+                      <option value="">未指定 / Not specified</option>
+                      {PAPER_TYPES.map(paper => (
+                        <option key={paper.value} value={paper.value}>{paper.label}</option>
+                      ))}
+                    </select>
                   </div>
+                  <label className="flex items-center gap-3 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!selectedMaterial.hasAnswerScheme}
+                      onChange={event => setSelectedMaterial(prev => ({
+                        ...prev,
+                        hasAnswerScheme: event.target.checked,
+                      }))}
+                    />
+                    有答案 / Has answer scheme
+                  </label>
                 </div>
               )}
 

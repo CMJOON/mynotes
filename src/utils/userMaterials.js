@@ -24,6 +24,8 @@ export function materialToUserSnapshot(material) {
     chapter: parseInt(material.chapter) || 0,
     year: parseInt(material.year) || 0,
     state: material.state || "",
+    paperType: material.paperType || "",
+    hasAnswerScheme: !!material.hasAnswerScheme,
     isFree: !!material.isFree,
     accessKey: material.accessKey || `${material.subjectName}_form${material.form}`,
     formPackage: material.formPackage || `form${material.form}`,

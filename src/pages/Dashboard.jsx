@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { collection, getDocs } from "firebase/firestore"
 import { User, ShoppingBag, Crown, BookOpen, Package, Star, RefreshCw, Clock, Trash2, CheckCircle2, BarChart3 } from "lucide-react"
 import PurchaseModal from "./PurchaseModal"
-import { PRICING } from "../utils/constants"
+import { PAPER_TYPES, PRICING } from "../utils/constants"
 import toast from "react-hot-toast"
 import { db } from "../firebase"
 import { loadUserMaterialList, removeCompletedMaterial, removeSavedMaterial } from "../utils/userMaterials"
@@ -24,6 +24,10 @@ function getPackageLabel(paidPackage) {
   const match = paidPackage.match(/^form(\d)$/)
   if (match) return { zh: `Form ${match[1]} 年级套餐`, en: `Form ${match[1]} Package — All Subjects` }
   return { zh: paidPackage, en: paidPackage }
+}
+
+function getPaperTypeLabel(value) {
+  return PAPER_TYPES.find(paper => paper.value === value)?.label || value
 }
 
 function parseSubjectKey(key) {
@@ -53,6 +57,10 @@ function getMaterialMeta(material) {
   if (material.chapter > 0) parts.push(`第${material.chapter}章`)
   if (material.year > 0) parts.push(material.year)
   if (material.state) parts.push(material.state)
+  if (material.paperType) parts.push(getPaperTypeLabel(material.paperType))
+  if (material.type === "trial" || material.type === "pastyear") {
+    parts.push(material.hasAnswerScheme ? "有答案" : "无答案")
+  }
 
   return parts.filter(Boolean).join(" · ")
 }

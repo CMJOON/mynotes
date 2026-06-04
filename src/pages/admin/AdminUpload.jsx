@@ -4,6 +4,7 @@ import { db } from "../../firebase"
 import toast from "react-hot-toast"
 import { Upload } from "lucide-react"
 import { buildMaterialFileData } from "../../utils/materialFiles"
+import { MALAYSIA_STATES, PAPER_TYPES } from "../../utils/constants"
 
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
@@ -21,6 +22,8 @@ export default function AdminUpload() {
     chapter: "",
     year: "",
     state: "",
+    paperType: "",
+    hasAnswerScheme: false,
     isFree: false,
   })
   const [file, setFile] = useState(null)
@@ -40,7 +43,8 @@ export default function AdminUpload() {
   }, [])
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value })
+    const { name, type, checked, value } = e.target
+    setForm({ ...form, [name]: type === "checkbox" ? checked : value })
   }
 
   const handleSubjectChange = (e) => {
@@ -91,9 +95,11 @@ export default function AdminUpload() {
         form: parseInt(form.form),
         subjectId: form.subjectId,
         subjectName: form.subjectName,
-        chapter: parseInt(form.chapter) || 0,
-        year: parseInt(form.year) || 0,
-        state: form.state || "",
+        chapter: form.type === "note" || form.type === "exercise" ? parseInt(form.chapter) || 0 : 0,
+        year: form.type === "trial" || form.type === "pastyear" ? parseInt(form.year) || 0 : 0,
+        state: form.type === "trial" ? form.state || "" : "",
+        paperType: form.type === "trial" || form.type === "pastyear" ? form.paperType || "" : "",
+        hasAnswerScheme: form.type === "trial" || form.type === "pastyear" ? !!form.hasAnswerScheme : false,
         isFree: form.isFree,
         downloadCount: 0,
         accessKey: `${form.subjectName}_form${form.form}`,
@@ -122,6 +128,8 @@ export default function AdminUpload() {
         chapter: "",
         year: "",
         state: "",
+        paperType: "",
+        hasAnswerScheme: false,
         isFree: true,
       })
       setFile(null)
@@ -215,7 +223,8 @@ export default function AdminUpload() {
         )}
 
         {(form.type === "trial" || form.type === "pastyear") && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">年份 / Year</label>
               <input
@@ -233,12 +242,35 @@ export default function AdminUpload() {
                 <select name="state" value={form.state} onChange={handleChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">选择州属</option>
-                  {["Johor","Kedah","Kelantan","Melaka","Negeri Sembilan","Pahang","Perak","Perlis","Pulau Pinang","Sabah","Sarawak","Selangor","Terengganu","WP Kuala Lumpur"].map(s => (
+                  {MALAYSIA_STATES.map(s => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>
             )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">试卷类型 / Paper Type</label>
+                <select name="paperType" value={form.paperType} onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">未指定 / Not specified</option>
+                  {PAPER_TYPES.map(paper => (
+                    <option key={paper.value} value={paper.value}>{paper.label}</option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-3 border border-gray-200 rounded-lg px-4 py-2 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="hasAnswerScheme"
+                  checked={form.hasAnswerScheme}
+                  onChange={handleChange}
+                />
+                有答案 / Has answer scheme
+              </label>
+            </div>
           </div>
         )}
 

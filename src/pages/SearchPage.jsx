@@ -25,6 +25,7 @@ import toast from "react-hot-toast"
 import PurchaseModal from "./PurchaseModal"
 import { canAccess } from "../utils/access"
 import { buildDownloadUrl, getMaterialFileUrl } from "../utils/materialFiles"
+import { EXAM_YEARS, MALAYSIA_STATES, PAPER_TYPES } from "../utils/constants"
 import {
   completeMaterialForUser,
   loadCompletedMaterialIds,
@@ -54,6 +55,12 @@ const TYPE_OPTIONS = [
   { value: "pastyear", label: "Past Year" },
 ]
 
+const ANSWER_OPTIONS = [
+  { value: "", label: "全部答案状态 / Any Answer" },
+  { value: "yes", label: "有答案 / Has Answer" },
+  { value: "no", label: "无答案 / No Answer" },
+]
+
 function normalize(value) {
   return String(value || "").trim().toLowerCase()
 }
@@ -75,6 +82,9 @@ function matchesKeyword(material, keyword) {
     material.type,
     material.state,
     material.year,
+    material.paperType,
+    getPaperTypeLabel(material.paperType),
+    material.hasAnswerScheme ? "answer scheme has answer" : "no answer scheme no answer",
     material.form ? `form ${material.form}` : "",
     material.chapter ? `chapter ${material.chapter}` : "",
   ]
@@ -83,6 +93,23 @@ function matchesKeyword(material, keyword) {
     .toLowerCase()
 
   return haystack.includes(keyword)
+}
+
+function getPaperTypeLabel(value) {
+  return PAPER_TYPES.find(paper => paper.value === value)?.label || value
+}
+
+function matchesStructuredFilters(material, filters) {
+  if (filters.year && Number(material.year || 0) !== Number(filters.year)) return false
+  if (filters.state && material.state !== filters.state) return false
+  if (filters.paperType && material.paperType !== filters.paperType) return false
+  if (filters.answer === "yes" && !material.hasAnswerScheme) return false
+  if (filters.answer === "no" && material.hasAnswerScheme) return false
+  return true
+}
+
+function getAnswerSchemeLabel(hasAnswerScheme) {
+  return hasAnswerScheme ? "有答案 / Answer" : "无答案 / No Answer"
 }
 
 export default function SearchPage() {
@@ -104,6 +131,10 @@ export default function SearchPage() {
     form: searchParams.get("form") || "",
     subjectId: searchParams.get("subjectId") || "",
     type: searchParams.get("type") || "",
+    year: searchParams.get("year") || "",
+    state: searchParams.get("state") || "",
+    paperType: searchParams.get("paperType") || "",
+    answer: searchParams.get("answer") || "",
   })
 
   useEffect(() => {
@@ -112,6 +143,10 @@ export default function SearchPage() {
       form: nextParams.get("form") || "",
       subjectId: nextParams.get("subjectId") || "",
       type: nextParams.get("type") || "",
+      year: nextParams.get("year") || "",
+      state: nextParams.get("state") || "",
+      paperType: nextParams.get("paperType") || "",
+      answer: nextParams.get("answer") || "",
     })
   }, [searchParamsKey])
 
@@ -151,7 +186,14 @@ export default function SearchPage() {
       setCurrentPage(1)
       try {
         const normalizedQuery = normalize(queryText)
-        const hasActiveSearch = normalizedQuery || filters.form || filters.subjectId || filters.type
+        const hasActiveSearch = normalizedQuery
+          || filters.form
+          || filters.subjectId
+          || filters.type
+          || filters.year
+          || filters.state
+          || filters.paperType
+          || filters.answer
 
         if (!hasActiveSearch) {
           setAllResults([])
@@ -182,6 +224,7 @@ export default function SearchPage() {
 
         const filtered = baseResults
           .filter(material => matchesKeyword(material, normalizedQuery))
+          .filter(material => matchesStructuredFilters(material, filters))
           .sort((a, b) => {
             if ((a.form || 0) !== (b.form || 0)) return (a.form || 0) - (b.form || 0)
             if ((a.subjectName || "") !== (b.subjectName || "")) {
@@ -220,6 +263,15 @@ export default function SearchPage() {
     else next.delete(name)
 
     if (name === "form") next.delete("subjectId")
+    if (name === "type") {
+      const nextType = value
+      if (nextType !== "trial") next.delete("state")
+      if (nextType !== "trial" && nextType !== "pastyear") {
+        next.delete("year")
+        next.delete("paperType")
+        next.delete("answer")
+      }
+    }
     setSearchParams(next)
   }
 
@@ -228,6 +280,10 @@ export default function SearchPage() {
     next.delete("form")
     next.delete("subjectId")
     next.delete("type")
+    next.delete("year")
+    next.delete("state")
+    next.delete("paperType")
+    next.delete("answer")
     setSearchParams(next)
   }
 
@@ -331,7 +387,13 @@ export default function SearchPage() {
     }
   }
 
-  const hasFilters = filters.form || filters.subjectId || filters.type
+  const hasFilters = filters.form
+    || filters.subjectId
+    || filters.type
+    || filters.year
+    || filters.state
+    || filters.paperType
+    || filters.answer
   const heading = queryText ? `"${queryText}"` : "筛选资料 / Filter Materials"
 
   return (
@@ -401,6 +463,59 @@ export default function SearchPage() {
               ))}
             </select>
           </div>
+
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <p className="text-sm font-medium text-gray-600">试卷筛选 / Exam Filters</p>
+              <p className="text-xs text-gray-400">适用于 Trial / Past Year</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <select
+                value={filters.year}
+                onChange={event => updateSearchParam("year", event.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">全部年份 / Any Year</option>
+                {EXAM_YEARS.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+
+              <select
+                value={filters.state}
+                onChange={event => updateSearchParam("state", event.target.value)}
+                disabled={filters.type && filters.type !== "trial"}
+                title="Only applies to Trial Paper"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                <option value="">全部州属 / Any State</option>
+                {MALAYSIA_STATES.map(state => (
+                  <option key={state} value={state}>{state}</option>
+                ))}
+              </select>
+
+              <select
+                value={filters.paperType}
+                onChange={event => updateSearchParam("paperType", event.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">全部试卷 / Any Paper</option>
+                {PAPER_TYPES.map(paper => (
+                  <option key={paper.value} value={paper.value}>{paper.label}</option>
+                ))}
+              </select>
+
+              <select
+                value={filters.answer}
+                onChange={event => updateSearchParam("answer", event.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {ANSWER_OPTIONS.map(answer => (
+                  <option key={answer.value || "all"} value={answer.value}>{answer.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         {loading ? (
@@ -446,6 +561,20 @@ export default function SearchPage() {
                           )}
                           {material.state && (
                             <span className="text-xs text-gray-400">· {material.state}</span>
+                          )}
+                          {material.paperType && (
+                            <span className="text-xs text-gray-400">· {getPaperTypeLabel(material.paperType)}</span>
+                          )}
+                          {(material.type === "trial" || material.type === "pastyear") && (
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                material.hasAnswerScheme
+                                  ? "bg-emerald-100 text-emerald-600"
+                                  : "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {getAnswerSchemeLabel(material.hasAnswerScheme)}
+                            </span>
                           )}
                           {isFree
                             ? <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-medium">免费 / Free</span>

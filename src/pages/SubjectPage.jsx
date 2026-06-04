@@ -3,11 +3,12 @@ import { useEffect, useState } from "react"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
-import { Lock, Download, Eye, Star, CheckCircle2 } from "lucide-react"
+import { Lock, Download, Eye, Star, CheckCircle2, Filter, X } from "lucide-react"
 import toast from "react-hot-toast"
 import PurchaseModal from "./PurchaseModal"
 import { canAccess } from "../utils/access"
 import { buildDownloadUrl, getMaterialFileUrl } from "../utils/materialFiles"
+import { EXAM_YEARS, MALAYSIA_STATES, PAPER_TYPES } from "../utils/constants"
 import {
   completeMaterialForUser,
   loadCompletedMaterialIds,
@@ -33,6 +34,20 @@ const TABS = [
   { key: "pastyear", zh: "Past Year", en: "Past Year" },
 ]
 
+const ANSWER_OPTIONS = [
+  { value: "", label: "全部答案状态 / Any Answer" },
+  { value: "yes", label: "有答案 / Has Answer" },
+  { value: "no", label: "无答案 / No Answer" },
+]
+
+function getPaperTypeLabel(value) {
+  return PAPER_TYPES.find(paper => paper.value === value)?.label || value
+}
+
+function getAnswerSchemeLabel(hasAnswerScheme) {
+  return hasAnswerScheme ? "有答案 / Answer" : "无答案 / No Answer"
+}
+
 export default function SubjectPage() {
   const { formId, subjectId } = useParams()
   const { user, userData } = useAuth()
@@ -46,6 +61,12 @@ export default function SubjectPage() {
   const [completedMaterialIds, setCompletedMaterialIds] = useState(new Set())
   const [savingMaterialId, setSavingMaterialId] = useState("")
   const [completingMaterialId, setCompletingMaterialId] = useState("")
+  const [examFilters, setExamFilters] = useState({
+    year: "",
+    state: "",
+    paperType: "",
+    answer: "",
+  })
 
   useEffect(() => {
     async function fetchData() {
@@ -200,6 +221,32 @@ export default function SubjectPage() {
     ? materials
     : materials.filter(m => m.type === activeTab)
 
+  const filteredMaterials = filtered.filter(material => {
+    if (activeTab === "note" || activeTab === "exercise") return true
+
+    if (examFilters.year && Number(material.year || 0) !== Number(examFilters.year)) return false
+    if (activeTab !== "pastyear" && examFilters.state && material.state !== examFilters.state) return false
+    if (examFilters.paperType && material.paperType !== examFilters.paperType) return false
+    if (examFilters.answer === "yes" && !material.hasAnswerScheme) return false
+    if (examFilters.answer === "no" && material.hasAnswerScheme) return false
+    return true
+  })
+
+  const showExamFilters = activeTab === "all" || activeTab === "trial" || activeTab === "pastyear"
+
+  function updateExamFilter(name, value) {
+    setExamFilters(prev => ({ ...prev, [name]: value }))
+  }
+
+  function clearExamFilters() {
+    setExamFilters({
+      year: "",
+      state: "",
+      paperType: "",
+      answer: "",
+    })
+  }
+
   const subjectName = subject?.name || ""
 
   return (
@@ -238,13 +285,78 @@ export default function SubjectPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-6">
+        {showExamFilters && (
+          <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <Filter size={16} className="text-blue-600" />
+                试卷筛选 / Exam Filters
+              </div>
+              {(examFilters.year || examFilters.state || examFilters.paperType || examFilters.answer) && (
+                <button
+                  onClick={clearExamFilters}
+                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-500 transition"
+                >
+                  <X size={13} /> 清除 / Clear
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <select
+                value={examFilters.year}
+                onChange={event => updateExamFilter("year", event.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">全部年份 / Any Year</option>
+                {EXAM_YEARS.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+
+              <select
+                value={examFilters.state}
+                onChange={event => updateExamFilter("state", event.target.value)}
+                disabled={activeTab === "pastyear"}
+                title="Only applies to Trial Paper"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                <option value="">全部州属 / Any State</option>
+                {MALAYSIA_STATES.map(state => (
+                  <option key={state} value={state}>{state}</option>
+                ))}
+              </select>
+
+              <select
+                value={examFilters.paperType}
+                onChange={event => updateExamFilter("paperType", event.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">全部试卷 / Any Paper</option>
+                {PAPER_TYPES.map(paper => (
+                  <option key={paper.value} value={paper.value}>{paper.label}</option>
+                ))}
+              </select>
+
+              <select
+                value={examFilters.answer}
+                onChange={event => updateExamFilter("answer", event.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {ANSWER_OPTIONS.map(answer => (
+                  <option key={answer.value || "all"} value={answer.value}>{answer.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-20 text-gray-400">加载中... / Loading...</div>
-        ) : filtered.length === 0 ? (
+        ) : filteredMaterials.length === 0 ? (
           <div className="text-center py-20 text-gray-400">暂无资料 / No materials found</div>
         ) : (
           <div className="space-y-3">
-            {filtered.map(material => {
+            {filteredMaterials.map(material => {
               const accessible = canAccess(user, userData, material)
               const isFree = material.type === "trial" || material.type === "pastyear" || material.isFree
               const isSaved = savedMaterialIds.has(material.id)
@@ -271,6 +383,23 @@ export default function SubjectPage() {
                         )}
                         {material.year > 0 && (
                           <span className="text-xs text-gray-400">· {material.year}</span>
+                        )}
+                        {material.state && (
+                          <span className="text-xs text-gray-400">· {material.state}</span>
+                        )}
+                        {material.paperType && (
+                          <span className="text-xs text-gray-400">· {getPaperTypeLabel(material.paperType)}</span>
+                        )}
+                        {(material.type === "trial" || material.type === "pastyear") && (
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              material.hasAnswerScheme
+                                ? "bg-emerald-100 text-emerald-600"
+                                : "bg-gray-100 text-gray-500"
+                            }`}
+                          >
+                            {getAnswerSchemeLabel(material.hasAnswerScheme)}
+                          </span>
                         )}
                         {isFree
                           ? <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-medium">免费 / Free</span>

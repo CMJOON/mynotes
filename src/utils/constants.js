@@ -36,3 +36,32 @@ export const PRICING = [
     emoji: "⭐",
   },
 ]
+
+export const MALAYSIA_STATES = [
+  "Johor",
+  "Kedah",
+  "Kelantan",
+  "Melaka",
+  "Negeri Sembilan",
+  "Pahang",
+  "Perak",
+  "Perlis",
+  "Pulau Pinang",
+  "Sabah",
+  "Sarawak",
+  "Selangor",
+  "Terengganu",
+  "WP Kuala Lumpur",
+]
+
+export const PAPER_TYPES = [
+  { value: "paper1", label: "Paper 1" },
+  { value: "paper2", label: "Paper 2" },
+  { value: "paper3", label: "Paper 3" },
+  { value: "paper4", label: "Paper 4" },
+  { value: "fullpaper", label: "Full Paper" },
+]
+
+const CURRENT_YEAR = new Date().getFullYear()
+
+export const EXAM_YEARS = Array.from({ length: 12 }, (_, index) => CURRENT_YEAR - index)
